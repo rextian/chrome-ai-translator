@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>AI 实时翻译助手</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="header">
+    <span class="logo">译</span>
+    <span class="title">AI 实时翻译助手</span>
+  </div>
+
+  <div class="row">
+    <label class="row-label">目标语言</label>
+    <select id="targetLang"></select>
+  </div>
+
+  <div class="row">
+    <label class="row-label">翻译平台</label>
+    <select id="provider"></select>
+  </div>
+  <div id="providerInfo" class="provider-info-line"></div>
+
+  <div class="row">
+    <label class="row-label">页面显示</label>
+    <select id="pageDisplayMode">
+      <option value="bilingual">双语对照</option>
+      <option value="replace">仅显示译文</option>
+    </select>
+  </div>
+
+  <div class="row checkbox-row">
+    <label><input type="checkbox" id="autoTranslate"> 打开网页时自动翻译</label>
+  </div>
+
+  <div class="actions">
+    <button id="btnPage" class="btn">📄 翻译本页 / 还原</button>
+    <button id="btnSubtitle" class="btn">💬 字幕翻译：<span id="subtitleState">开</span></button>
+    <button id="btnLive" class="btn btn-primary">🔴 开始直播实时翻译</button>
+  </div>
+
+  <div id="status" class="status"></div>
+
+  <div class="footer">
+    <a href="#" id="openOptions">⚙️ 设置 API Key</a>
+  </div>
+
+  <div class="copyright">© RexTian · <a href="https://weibo.com/132666987" target="_blank">微博 @太乙真人</a> · <a href="https://www.rextian.com" target="_blank">rextian.com</a></div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
