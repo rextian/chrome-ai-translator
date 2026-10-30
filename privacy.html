@@ -1,0 +1,108 @@
+# 隐私权政策（中文，适配Chrome应用商店，AI划词翻译扩展）
+> 最后更新：2026年10月31日
+> 适用产品：本AI翻译浏览器扩展（下称“本扩展”）
+
+## 1. 概述
+本扩展是一款AI划词翻译工具，仅在用户主动操作时，对用户选中的网页文本提供翻译、释义、文本润色服务。本政策说明我们如何收集、使用、存储、共享您的信息，以及您拥有的相关权利。
+本扩展**不会自动读取网页内容、不会静默采集浏览记录、不会用于广告追踪、不会收集无关个人信息**。
+
+## 2. 我们会获取哪些信息、何时获取
+仅在您**主动触发翻译**（划词选中文字、点击右键翻译菜单、在弹窗输入文本翻译）时，才获取您选中/输入的文本内容。
+- ✅ 获取：您主动选中、提交的待翻译文本
+- ❌ 不自动读取：完整网页、表单、密码、Cookie、浏览历史、URL（除非文本本身包含）
+- ❌ 不采集：设备标识、位置信息、通讯录等其他隐私信息
+
+> 翻译文本仅用于本次翻译请求；翻译完成后，我们不会在开发者服务器留存您的原文与译文。
+
+## 3. 信息如何使用
+1. **提供翻译服务**：将您提交的文本通过HTTPS加密发送至您选择的AI翻译服务接口，获取翻译结果并展示给您；
+2. **本地保存配置**：借助浏览器`storage`本地存储，保存您的偏好设置，包括目标翻译语言、翻译模型、弹窗样式、快捷键配置；该数据仅存于当前浏览器本地，不上传到开发者服务器；
+3. **功能保障**：使用offscreen文档、主机权限、右键菜单权限实现翻译弹窗、文本预处理、剪贴板复制翻译结果等翻译相关能力，无其他用途。
+
+我们**不会将您的翻译文本用于模型训练、营销推送、大数据分析**。
+
+## 4. 信息共享与披露
+- 您提交的翻译文本，仅会转发给您自行选择的AI翻译服务商（如您配置的大模型API），受对应服务商自身隐私政策约束；
+- 开发者不会单独收集、转卖、向其他第三方分享您的翻译内容；
+- 仅在法律强制要求、司法机关依法调取的情况下才会配合提供相关信息。
+
+## 5. 数据存储
+1. 用户翻译配置：保存在浏览器本地`storage`，您随时可以在扩展设置里重置、清除；
+2. 翻译请求文本：仅在内存临时处理，请求完成后即清除，开发者后台不持久存储原文、译文；
+3. 本扩展不自带后端存储数据库，不长期托管用户翻译记录。
+
+## 6. 权限说明（对应商店审核）
+- host主机权限：仅在您主动翻译时，读取选中文本、注入轻量脚本展示翻译弹窗；
+- contextMenus：添加右键“翻译选中文本”菜单入口；
+- offscreen：承载Service Worker不支持的文本预处理、剪贴板、翻译请求逻辑；
+- storage：本地存储翻译偏好设置；
+- remote code：仅按需加载翻译渲染、接口请求相关脚本，仅用户触发时加载，不加载未知恶意代码。
+
+## 7. 您的权利
+- 随时停止使用扩展、卸载扩展；卸载后本地存储的配置会随浏览器扩展数据清除；
+- 您可自行选择使用哪一家AI翻译接口，自主控制翻译数据流向；
+- 您有权要求了解本扩展的数据处理方式，可通过后台填写的联系邮箱向我们咨询隐私相关问题。
+
+## 8. 未成年人
+本扩展面向普通成年互联网用户，我们不会主动收集未成年人个人信息。
+
+## 9. 政策更新
+我们可能根据产品或平台规则更新本隐私权政策，更新后会在扩展说明页公示，继续使用即代表接受更新后的政策。
+
+## 10. 联系我们
+隐私相关疑问，请发送邮件至：i@rextian.com
+
+---
+
+# Privacy Policy（英文版本，商店优先提交这个，和中文一一对应）
+Last Updated: October 31, 2026
+This Privacy Policy applies to this AI Translator Browser Extension (the “Extension”).
+
+## 1. Overview
+The Extension is an AI text translation tool. It provides translation, definition and text polishing for text you manually select on web pages, only when you actively trigger the function. This policy describes how we collect, use, store and share your data, and your rights.
+The Extension will NOT automatically read webpage content, silently collect browsing history, track users for advertising, or collect irrelevant personal data.
+
+## 2. Data We Access & When
+We only access the text you select or submit for translation, after your explicit action (select text, click right‑click translate menu, input text in popup).
+- ✅ Collected: text you manually select or submit for translation
+- ❌ NOT automatically read: full page content, passwords, form data, cookies, browsing history
+- ❌ NOT collected: location, contact list, persistent device identifiers
+
+Submitted text is only used for the current translation request. We do not store your original text or translation results on our developer server after translation.
+
+## 3. How We Use Your Data
+1. Provide translation service: Your submitted text is sent over HTTPS to the AI translation provider you choose, to fetch and display translation results.
+2. Store preferences locally: Browser `storage` is used to save your settings such as target language, AI model, popup style and hotkeys. These settings stay locally in your browser and are NOT uploaded to our server.
+3. Core feature support: Host permissions, contextMenus and offscreen documents are used for translation popups, text preprocessing and copy-to-clipboard functions, for translation purposes only.
+
+We will NOT use your translated text for AI model training, marketing or analytics.
+
+## 4. Data Sharing
+Your translation text is forwarded only to the AI service provider you configure, governed by that provider’s own privacy policy.
+We do not sell or share your translation content with unrelated third parties. We may disclose data only when required by applicable law or valid legal process.
+
+## 5. Data Retention
+- Your preferences are saved locally in browser storage. You may reset or clear them in extension settings anytime.
+- Translation text is processed temporarily in memory and discarded immediately after the request completes. We do not persist translation records on our backend.
+- We do not run a dedicated database to store your translation history.
+
+## 6. Permission Justification
+- Host permissions: Read selected text and inject lightweight scripts for translation popup, only on user trigger.
+- contextMenus: Add “Translate selected text” entry to browser right‑click menu.
+- offscreen: Handle network requests, text processing and clipboard logic unsupported in service workers.
+- storage: Save local translation preferences.
+- Remote code: Load necessary scripts for API request and rendering only on user activation. No untrusted arbitrary code.
+
+## 7. Your Rights
+- You may stop using or uninstall the Extension at any time; local stored preferences will be cleared after uninstallation.
+- You can choose your own AI translation provider and control where your translation data is sent.
+- You may contact us via the verified developer email for privacy inquiries.
+
+## 8. Children
+The Extension is intended for general users. We do not knowingly collect personal information from minors.
+
+## 9. Policy Changes
+We may revise this Privacy Policy to comply with platform rules or product updates. Continued use of the Extension after changes means you accept the revised policy.
+
+## 10. Contact
+For privacy questions, please email: i@rextian.com
