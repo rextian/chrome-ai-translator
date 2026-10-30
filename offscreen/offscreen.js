@@ -7,26 +7,20 @@ let mediaStream = null;
 let recorder = null;
 let active = false;
 let segmentMs = 6000;
-let keepAliveVideo = null;
+let keepAliveCtx = null;
 
 async function startCapture(streamId, seconds) {
   stopCaptureInternal();
   segmentMs = Math.max(3, Number(seconds) || 6) * 1000;
 
   try {
+    // 只请求音频轨：tabCapture 的音频是"复制"而非"移走"，原标签页继续出声。
+    // 若同时请求 video 轨，Chrome 会接管整个标签页媒体流，导致原页面被静音。
     mediaStream = await navigator.mediaDevices.getUserMedia({
       audio: {
         mandatory: {
           chromeMediaSource: 'tab',
           chromeMediaSourceId: streamId
-        }
-      },
-      video: {
-        mandatory: {
-          chromeMediaSource: 'tab',
-          chromeMediaSourceId: streamId,
-          maxWidth: 2,
-          maxHeight: 2
         }
       }
     });
@@ -35,11 +29,13 @@ async function startCapture(streamId, seconds) {
     return;
   }
 
-  // 用一个隐藏 video 元素保持媒体流活跃
-  keepAliveVideo = document.createElement('video');
-  keepAliveVideo.muted = true;
-  keepAliveVideo.srcObject = mediaStream;
-  keepAliveVideo.play().catch(() => {});
+  // 保活：AnalyserNode 拉流但不接 destination（无声），
+  // 防止部分 Chrome 版本把 audio-only 捕获流判定为闲置而中断。
+  try {
+    keepAliveCtx = new (window.AudioContext || window.webkitAudioContext)();
+    keepAliveCtx.createMediaStreamSource(mediaStream).connect(keepAliveCtx.createAnalyser());
+    keepAliveCtx.resume().catch(() => {});
+  } catch {}
 
   active = true;
   runSegment();
@@ -156,13 +152,10 @@ function stopCaptureInternal() {
   active = false;
   try { if (recorder && recorder.state !== 'inactive') recorder.stop(); } catch {}
   recorder = null;
+  if (keepAliveCtx) { keepAliveCtx.close().catch(() => {}); keepAliveCtx = null; }
   if (mediaStream) {
     mediaStream.getTracks().forEach((t) => t.stop());
     mediaStream = null;
-  }
-  if (keepAliveVideo) {
-    keepAliveVideo.srcObject = null;
-    keepAliveVideo = null;
   }
 }
 
