@@ -37,6 +37,8 @@
 | Kimi（月之暗面） | 注册送额度 | https://platform.moonshot.cn/console/api-keys |
 | 豆包（火山方舟） | 可填模型 ID 或接入点 ID（`ep-xxx`） | https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey |
 | DeepSeek | 价格低 | https://platform.deepseek.com/api_keys |
+| OpenAI | `gpt-4o-mini` 性价比高；**需海外网络** | https://platform.openai.com/api-keys |
+| Gemini（Google） | `gemini-2.5-flash` 有免费额度；**需海外网络** | https://aistudio.google.com/apikey |
 | 自定义 | 任意 OpenAI 兼容的 `/chat/completions` 接口 | — |
 
 **专用翻译平台（免费额度）：**
@@ -61,8 +63,12 @@
 | --- | --- |
 | 硅基流动 | 有免费额度，`FunAudioLLM/SenseVoiceSmall` 中文识别效果好 |
 | Groq | 免费 Whisper，速度快 |
-| OpenAI | `whisper-1` |
+| OpenAI | `whisper-1` / `gpt-4o-mini-transcribe`；**需海外网络** |
+| Gemini（Google） | `gemini-2.5-flash` 音频转写，有免费额度；**需海外网络** |
 | 自定义 | 任意 OpenAI 兼容的 `/audio/transcriptions` 接口 |
+
+> 插件捕获的音频会统一转为 WAV（16kHz 单声道）再送识别，各平台格式全兼容。
+> DeepSeek 没有语音识别产品，故语音侧无 DeepSeek 选项。
 
 配置后点击「测试连接」验证可用性。
 

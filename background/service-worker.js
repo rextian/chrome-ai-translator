@@ -451,15 +451,21 @@ async function translateBatch(texts, targetLang) {
   return results;
 }
 
-/* ---------------- 语音识别（OpenAI 兼容 /audio/transcriptions） ---------------- */
+/* ---------------- 语音识别（OpenAI 兼容 /audio/transcriptions + Gemini generateContent） ---------------- */
 
-async function transcribeAudio(dataUrl, filename = 'segment.webm') {
+async function transcribeAudio(dataUrl) {
   const settings = await getSettings();
   const a = settings.asr || {};
   const baseUrl = (a.baseUrl || '').replace(/\/+$/, '');
   if (!a.apiKey) throw new Error('未配置语音识别 API Key（设置页 → 语音识别）');
   if (!baseUrl) throw new Error('未配置语音识别 API 地址');
 
+  const presetType = ASR_PRESETS[a.preset]?.type || 'openai';
+  if (presetType === 'gemini') return geminiTranscribe(dataUrl, a, baseUrl);
+
+  // OpenAI 兼容 /audio/transcriptions（whisper / SenseVoice / Groq）
+  const mime = (dataUrl.match(/^data:(.*?);/) || [])[1] || 'audio/wav';
+  const filename = mime.includes('wav') ? 'segment.wav' : 'segment.webm';
   const blob = await (await fetch(dataUrl)).blob();
   const fd = new FormData();
   fd.append('file', blob, filename);
@@ -474,6 +480,36 @@ async function transcribeAudio(dataUrl, filename = 'segment.webm') {
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) throw new Error(`语音识别接口错误：${data?.error?.message || ('HTTP ' + resp.status)}`);
   return (data.text || '').trim();
+}
+
+/** Gemini 语音识别：generateContent 传内联音频（有免费额度） */
+async function geminiTranscribe(dataUrl, cfg, baseUrl) {
+  const base64 = dataUrl.split(',')[1];
+  const mime = (dataUrl.match(/^data:(.*?);/) || [])[1] || 'audio/wav';
+  const model = cfg.model || 'gemini-2.5-flash';
+
+  const resp = await fetch(`${baseUrl}/models/${model}:generateContent`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': cfg.apiKey
+    },
+    body: JSON.stringify({
+      contents: [{
+        parts: [
+          { inline_data: { mime_type: mime, data: base64 } },
+          { text: 'Transcribe this audio verbatim. Output ONLY the transcription text in its original language. Do not translate, do not add any explanation or timestamps. If there is no speech, output nothing.' }
+        ]
+      }],
+      generationConfig: { temperature: 0 }
+    })
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    throw new Error(`Gemini 语音识别错误：${data?.error?.message || ('HTTP ' + resp.status)}`);
+  }
+  const text = data?.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('').trim();
+  return text || '';
 }
 
 /* 生成一段静音 WAV（用于测试 ASR 连通性） */
@@ -614,7 +650,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return { ok: true, detail: `翻译测试：Hello, world → ${r}` };
     },
     TEST_ASR: async () => {
-      await transcribeAudio(silentWavDataUrl(), 'silence.wav');
+      await transcribeAudio(silentWavDataUrl());
       return { ok: true, detail: '语音识别接口可用' };
     }
   };
