@@ -7,133 +7,141 @@
 </head>
 <body>
   <div class="container">
-    <h1>AI 实时翻译助手 · 设置</h1>
+    <h1 data-i18n="settings_title">AI 实时翻译助手 · 设置</h1>
 
     <section class="card">
-      <h2>翻译服务（用于文字翻译）</h2>
+      <h2 data-i18n="card_provider">翻译服务（用于文字翻译）</h2>
       <div class="field">
-        <label>服务商</label>
+        <label data-i18n="provider_label">服务商</label>
         <select id="provider"></select>
       </div>
 
-      <!-- LLM（OpenAI 兼容）：Kimi / 豆包 / DeepSeek / 智谱 / 自定义 -->
+      <!-- LLM（OpenAI 兼容）：Kimi / 豆包 / DeepSeek / 智谱 / OpenAI / Gemini / 自定义 -->
       <div id="group-llm" class="group">
         <div class="field">
           <label>API Key</label>
           <input type="password" id="llmKey" placeholder="sk-...">
-          <a id="llmKeyLink" href="#" target="_blank" class="hint-link">获取 Key →</a>
+          <a id="llmKeyLink" href="#" target="_blank" class="hint-link" data-i18n="get_key">获取 Key →</a>
         </div>
         <div class="field">
-          <label>API 地址</label>
+          <label data-i18n="api_url">API 地址</label>
           <input type="text" id="llmBaseUrl" placeholder="https://api.moonshot.cn/v1">
         </div>
         <div class="field">
-          <label>模型</label>
+          <label data-i18n="model_label">模型</label>
           <input type="text" id="llmModel" list="llmModelList" placeholder="kimi-k2-0711-preview">
           <datalist id="llmModelList"></datalist>
-          <p class="hint" id="llmModelHint">豆包用户：可填写模型 ID 或火山方舟的接入点 ID（ep-xxx）；智谱免费模型：glm-4-flash</p>
+          <p class="hint" id="llmModelHint" data-i18n="llm_model_hint"></p>
         </div>
       </div>
 
       <!-- 阿里云机器翻译 -->
       <div id="group-aliyun" class="group" style="display:none">
-        <p class="hint">需已开通「机器翻译」服务（通用版每月 100 万字符免费额度）。</p>
+        <p class="hint" data-i18n="aliyun_hint1"></p>
         <div class="field">
           <label>AccessKey ID</label>
           <input type="password" id="aliyunAccessKeyId" placeholder="LTAI...">
-          <a id="aliyunKeyLink" href="#" target="_blank" class="hint-link">获取 AccessKey →</a>
+          <a id="aliyunKeyLink" href="#" target="_blank" class="hint-link" data-i18n="aliyun_key_link">获取 AccessKey →</a>
         </div>
         <div class="field">
           <label>AccessKey Secret</label>
           <input type="password" id="aliyunAccessKeySecret" placeholder="">
         </div>
         <div class="field">
-          <label>地域</label>
+          <label data-i18n="region_label">地域</label>
           <input type="text" id="aliyunRegionId" placeholder="cn-hangzhou">
         </div>
-        <p class="hint">默认国内站（cn-hangzhou，endpoint 为 mt.cn-hangzhou.aliyuncs.com），一般无需修改。建议使用子账号（RAM）AccessKey 并仅授予机器翻译（AliyunMTFullAccess）权限。</p>
+        <p class="hint" data-i18n="aliyun_hint2"></p>
       </div>
 
       <!-- 百度翻译开放平台 -->
       <div id="group-baidu" class="group" style="display:none">
-        <p class="hint">需已开通「通用文本翻译」（标准版免费，限流 QPS=1，整页翻译会较慢）。</p>
+        <p class="hint" data-i18n="baidu_hint"></p>
         <div class="field">
-          <label>APP ID</label>
+          <label data-i18n="appid_label">APP ID</label>
           <input type="password" id="baiduAppid" placeholder="">
-          <a id="baiduKeyLink" href="#" target="_blank" class="hint-link">管理开发者信息 →</a>
+          <a id="baiduKeyLink" href="#" target="_blank" class="hint-link" data-i18n="baidu_key_link">管理开发者信息 →</a>
         </div>
         <div class="field">
-          <label>密钥</label>
+          <label data-i18n="secret_label">密钥</label>
           <input type="password" id="baiduKey" placeholder="">
         </div>
       </div>
 
-      <button id="testLlm" class="btn">测试连接</button>
+      <button id="testLlm" class="btn" data-i18n="btn_test">测试连接</button>
       <span id="llmTestResult" class="test-result"></span>
     </section>
 
     <section class="card">
-      <h2>语音识别（用于直播实时翻译）</h2>
-      <p class="hint">直播翻译流程：捕获标签页音频 → 语音识别转文字 → 翻译服务翻译。此处配置语音识别服务。</p>
+      <h2 data-i18n="card_asr">语音识别（用于直播实时翻译）</h2>
+      <p class="hint" data-i18n="asr_flow_hint"></p>
       <div class="field">
-        <label>服务商</label>
+        <label data-i18n="provider_label">服务商</label>
         <select id="asrPreset"></select>
       </div>
       <div class="field">
         <label>API Key</label>
         <input type="password" id="asrKey" placeholder="sk-...">
-        <a id="asrKeyLink" href="#" target="_blank" class="hint-link">获取 Key →</a>
+        <a id="asrKeyLink" href="#" target="_blank" class="hint-link" data-i18n="get_key">获取 Key →</a>
       </div>
       <div class="field">
-        <label>API 地址</label>
+        <label data-i18n="api_url">API 地址</label>
         <input type="text" id="asrBaseUrl" placeholder="https://api.siliconflow.cn/v1">
       </div>
       <div class="field">
-        <label>模型</label>
+        <label data-i18n="model_label">模型</label>
         <input type="text" id="asrModel" list="asrModelList" placeholder="FunAudioLLM/SenseVoiceSmall">
         <datalist id="asrModelList"></datalist>
       </div>
       <div class="field">
-        <label>分段时长</label>
+        <label data-i18n="segment_label">分段时长</label>
         <select id="segmentSeconds">
-          <option value="4">4 秒（延迟低，费用高）</option>
-          <option value="6">6 秒（推荐）</option>
-          <option value="8">8 秒（更省）</option>
-          <option value="10">10 秒（最省，延迟高）</option>
+          <option value="4" data-i18n="seg_4">4 秒（延迟低，费用高）</option>
+          <option value="6" data-i18n="seg_6">6 秒（推荐）</option>
+          <option value="8" data-i18n="seg_8">8 秒（更省）</option>
+          <option value="10" data-i18n="seg_10">10 秒（最省，延迟高）</option>
         </select>
       </div>
-      <button id="testAsr" class="btn">测试连接</button>
+      <button id="testAsr" class="btn" data-i18n="btn_test">测试连接</button>
       <span id="asrTestResult" class="test-result"></span>
     </section>
 
     <section class="card">
-      <h2>通用</h2>
+      <h2 data-i18n="card_general">通用</h2>
       <div class="field">
-        <label>目标语言</label>
+        <label data-i18n="ui_lang">界面语言</label>
+        <select id="uiLang">
+          <option value="auto" data-i18n="ui_lang_auto">自动（跟随浏览器）</option>
+          <option value="zh-CN">中文</option>
+          <option value="en">English</option>
+        </select>
+      </div>
+      <div class="field">
+        <label data-i18n="target_lang">目标语言</label>
         <select id="targetLang"></select>
       </div>
       <div class="field">
-        <label>页面显示</label>
+        <label data-i18n="display_mode">页面显示</label>
         <select id="pageDisplayMode">
-          <option value="bilingual">双语对照（原文 + 译文）</option>
-          <option value="replace">仅显示译文（隐藏原文）</option>
+          <option value="bilingual" data-i18n="display_bilingual_opt">双语对照（原文 + 译文）</option>
+          <option value="replace" data-i18n="display_replace_opt">仅显示译文（隐藏原文）</option>
         </select>
       </div>
       <div class="field checkbox">
-        <label><input type="checkbox" id="autoTranslate"> 打开网页时自动翻译（页面语言与目标语言相同时自动跳过）</label>
+        <label><input type="checkbox" id="autoTranslate"> <span data-i18n="auto_translate_opt">打开网页时自动翻译</span></label>
       </div>
       <div class="field checkbox">
-        <label><input type="checkbox" id="subtitleEnabled"> YouTube 字幕自动翻译（需视频开启 CC 字幕）</label>
+        <label><input type="checkbox" id="subtitleEnabled"> <span data-i18n="subtitle_enabled">YouTube 字幕自动翻译</span></label>
       </div>
       <div class="field checkbox">
-        <label><input type="checkbox" id="showOriginal"> 直播浮窗中同时显示原文</label>
+        <label><input type="checkbox" id="showOriginal"> <span data-i18n="show_original">直播浮窗中同时显示原文</span></label>
       </div>
     </section>
 
-    <div id="saveTip" class="save-tip">设置已自动保存 ✓</div>
+    <div id="saveTip" class="save-tip" data-i18n="saved_tip">设置已自动保存 ✓</div>
 
     <footer class="site-footer">
-      <p>AI 实时翻译助手 · 开发者：<strong>RexTian</strong></p>
+      <p>AI 实时翻译助手 · <span data-i18n="footer_developer">开发者</span>：<strong>RexTian</strong></p>
       <p>
         <a href="https://weibo.com/132666987" target="_blank">微博 @太乙真人</a> ·
         <a href="https://www.rextian.com" target="_blank">https://www.rextian.com</a>
@@ -141,6 +149,7 @@
     </footer>
   </div>
 
+  <script src="../lib/i18n.js"></script>
   <script type="module" src="options.js"></script>
 </body>
 </html>

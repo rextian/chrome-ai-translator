@@ -1,9 +1,25 @@
 import { PROVIDER_PRESETS, TARGET_LANGS, DEFAULT_SETTINGS, isProviderConfigured } from '../lib/presets.js';
 
 const $ = (id) => document.getElementById(id);
+const { t } = globalThis.AI_TR_I18N;
 
 let settings = null;
 let liveActive = false;
+
+function lang() {
+  return settings?.uiLang || 'auto';
+}
+
+function applyI18n() {
+  const l = lang();
+  document.documentElement.lang = l === 'en' ? 'en' : 'zh-CN';
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
+    el.textContent = t(l, el.dataset.i18n);
+  });
+  refreshSubtitleBtn();
+  refreshLiveBtn();
+  refreshProviderInfo();
+}
 
 function setStatus(text, ok = false) {
   const el = $('status');
@@ -35,29 +51,35 @@ function refreshProviderInfo() {
   const cfg = settings.providers[settings.provider] || {};
   const el = $('providerInfo');
   if (isProviderConfigured(settings.provider, cfg)) {
-    el.textContent = '✓ 密钥已配置';
+    el.textContent = t(lang(), 'key_ok');
     el.className = 'provider-info-line ok';
   } else {
-    el.textContent = '⚠ 该平台未配置密钥，点下方「设置 API Key」';
+    el.textContent = t(lang(), 'key_missing');
     el.className = 'provider-info-line miss';
   }
 }
 
+function refreshSubtitleBtn() {
+  $('btnSubtitle').textContent = t(lang(), 'btn_subtitle', { state: t(lang(), settings.subtitleEnabled ? 'on' : 'off') });
+}
+
 function refreshLiveBtn() {
   const btn = $('btnLive');
-  if (liveActive) {
-    btn.textContent = '⏹ 停止实时翻译';
-    btn.classList.add('stop');
-  } else {
-    btn.textContent = '🔴 开始直播实时翻译';
-    btn.classList.remove('stop');
-  }
+  btn.textContent = t(lang(), liveActive ? 'btn_live_stop' : 'btn_live_start');
+  btn.classList.toggle('stop', liveActive);
 }
 
 async function init() {
   await loadSettings();
 
-  // 目标语言下拉
+  // 界面语言
+  $('uiLang').value = settings.uiLang || 'auto';
+  $('uiLang').addEventListener('change', async () => {
+    await saveSettings({ uiLang: $('uiLang').value });
+    applyI18n();
+  });
+
+  // 目标语言下拉（语言名以母语显示，不翻译）
   const langSel = $('targetLang');
   for (const [code, name] of TARGET_LANGS) {
     const opt = document.createElement('option');
@@ -90,38 +112,33 @@ async function init() {
   $('autoTranslate').checked = settings.autoTranslate === true;
   $('autoTranslate').addEventListener('change', async () => {
     await saveSettings({ autoTranslate: $('autoTranslate').checked });
-    setStatus($('autoTranslate').checked ? '自动翻译已开启，新打开的网页将自动翻译' : '自动翻译已关闭', true);
+    setStatus(t(lang(), $('autoTranslate').checked ? 'auto_on_tip' : 'auto_off_tip'), true);
   });
 
-  refreshProviderInfo();
-
   // 字幕开关
-  const refreshSubtitle = () => { $('subtitleState').textContent = settings.subtitleEnabled ? '开' : '关'; };
-  refreshSubtitle();
   $('btnSubtitle').addEventListener('click', async () => {
     await saveSettings({ subtitleEnabled: !settings.subtitleEnabled });
-    refreshSubtitle();
+    refreshSubtitleBtn();
   });
 
   // 整页翻译
   $('btnPage').addEventListener('click', async () => {
     const tab = await currentTab();
     if (!tab?.id || !/^https?:/.test(tab.url || '')) {
-      setStatus('当前页面不支持（仅限 http/https 页面）');
+      setStatus(t(lang(), 'status_unsupported'));
       return;
     }
     try {
       await chrome.tabs.sendMessage(tab.id, { type: 'PAGE_TRANSLATE_TOGGLE' });
       window.close();
     } catch {
-      setStatus('无法连接页面，请刷新网页后重试');
+      setStatus(t(lang(), 'status_no_conn'));
     }
   });
 
   // 直播实时翻译
   const st = await chrome.runtime.sendMessage({ type: 'GET_LIVE_STATE' }).catch(() => null);
   liveActive = !!st?.live?.active;
-  refreshLiveBtn();
 
   $('btnLive').addEventListener('click', async () => {
     setStatus('');
@@ -133,20 +150,20 @@ async function init() {
       return;
     }
     if (!tab?.id || !/^https?:/.test(tab.url || '')) {
-      setStatus('请在要翻译的网页（如 YouTube 直播页）上点击本按钮');
+      setStatus(t(lang(), 'status_live_hint'));
       return;
     }
     if (!settings.asr?.apiKey) {
-      setStatus('请先在「设置」中配置语音识别（ASR）API Key');
+      setStatus(t(lang(), 'status_need_asr'));
       return;
     }
     const resp = await chrome.runtime.sendMessage({ type: 'START_LIVE', tabId: tab.id }).catch((e) => ({ ok: false, error: e.message }));
     if (resp?.ok) {
       liveActive = true;
       refreshLiveBtn();
-      setStatus('已开始，翻译结果将显示在页面浮窗中', true);
+      setStatus(t(lang(), 'status_live_started'), true);
     } else {
-      setStatus(resp?.error || '启动失败');
+      setStatus(resp?.error || 'Error');
     }
   });
 
@@ -154,6 +171,8 @@ async function init() {
     e.preventDefault();
     chrome.runtime.openOptionsPage();
   });
+
+  applyI18n();
 }
 
 init();

@@ -3,6 +3,12 @@
  */
 import { PROVIDER_PRESETS, ASR_PRESETS, DEFAULT_SETTINGS, LANG_NAMES, BAIDU_LANG, ALIYUN_LANG } from '../lib/presets.js';
 import { md5 } from '../lib/md5.js';
+import '../lib/i18n.js';
+
+/** 界面语言文案（settings.uiLang: auto/zh-CN/en） */
+function tr(settings, key, vars) {
+  return globalThis.AI_TR_I18N.t(settings?.uiLang || 'auto', key, vars);
+}
 
 /* ---------------- 设置读取（深合并默认值） ---------------- */
 
@@ -73,9 +79,9 @@ function releaseKeepAlive() {
 async function callLLM(settings, messages, { maxTokens = 2000 } = {}) {
   const p = settings.providers[settings.provider] || {};
   const baseUrl = (p.baseUrl || '').replace(/\/+$/, '');
-  if (!p.apiKey) throw new Error('未配置 API Key，请先在扩展设置页填写');
-  if (!baseUrl) throw new Error('未配置 API 地址');
-  if (!p.model) throw new Error('未配置模型名称');
+  if (!p.apiKey) throw new Error(tr(settings, 'err_no_key'));
+  if (!baseUrl) throw new Error(tr(settings, 'err_no_baseurl'));
+  if (!p.model) throw new Error(tr(settings, 'err_no_model'));
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 45000);
@@ -91,16 +97,16 @@ async function callLLM(settings, messages, { maxTokens = 2000 } = {}) {
       signal: ctrl.signal
     });
   } catch (e) {
-    if (e.name === 'AbortError') throw new Error('翻译请求超时');
-    throw new Error('网络错误：' + e.message);
+    if (e.name === 'AbortError') throw new Error(tr(settings, 'err_timeout'));
+    throw new Error(tr(settings, 'err_network', { msg: e.message }));
   } finally {
     clearTimeout(timer);
   }
 
   const data = await resp.json().catch(() => ({}));
-  if (!resp.ok) throw new Error(`翻译接口错误：${data?.error?.message || ('HTTP ' + resp.status)}`);
+  if (!resp.ok) throw new Error(tr(settings, 'err_llm_http', { msg: data?.error?.message || ('HTTP ' + resp.status) }));
   const content = data?.choices?.[0]?.message?.content;
-  if (!content) throw new Error('翻译接口返回为空');
+  if (!content) throw new Error(tr(settings, 'err_empty'));
   return content.trim();
 }
 
@@ -117,9 +123,9 @@ function buildMessages(text, targetLang, mode) {
 
 /* ---------------- 阿里云机器翻译（RPC 签名 HMAC-SHA1） ---------------- */
 
-async function aliyunTranslate(text, targetLang, cfg) {
+async function aliyunTranslate(text, targetLang, cfg, settings) {
   if (!cfg.accessKeyId || !cfg.accessKeySecret) {
-    throw new Error('未配置阿里云 AccessKey，请先在扩展设置页填写');
+    throw new Error(tr(settings, 'err_no_aliyun_key'));
   }
   const regionId = cfg.regionId || 'cn-hangzhou';
   const endpoint = `https://mt.${regionId}.aliyuncs.com`;
@@ -164,16 +170,16 @@ async function aliyunTranslate(text, targetLang, cfg) {
   });
   const data = await resp.json().catch(() => ({}));
   if (String(data.Code) !== '200') {
-    throw new Error(`阿里云翻译错误 ${data.Code || resp.status}：${data.Message || '未知错误'}`);
+    throw new Error(tr(settings, 'err_aliyun', { code: data.Code || resp.status, msg: data.Message || 'unknown' }));
   }
   return data.Data.Translated;
 }
 
 /* ---------------- 百度翻译开放平台（MD5 签名） ---------------- */
 
-async function baiduTranslate(text, targetLang, cfg) {
+async function baiduTranslate(text, targetLang, cfg, settings) {
   if (!cfg.appid || !cfg.key) {
-    throw new Error('未配置百度翻译 APP ID / 密钥，请先在扩展设置页填写');
+    throw new Error(tr(settings, 'err_no_baidu_key'));
   }
   const salt = Date.now().toString();
   const sign = md5(cfg.appid + text + salt + cfg.key);
@@ -194,9 +200,9 @@ async function baiduTranslate(text, targetLang, cfg) {
   });
   const data = await resp.json().catch(() => ({}));
   if (data.error_code) {
-    throw new Error(`百度翻译错误 ${data.error_code}：${data.error_msg || ''}`);
+    throw new Error(tr(settings, 'err_baidu', { code: data.error_code, msg: data.error_msg || '' }));
   }
-  if (!data.trans_result) throw new Error('百度翻译返回为空');
+  if (!data.trans_result) throw new Error(tr(settings, 'err_baidu_empty'));
   return data.trans_result.map((t) => t.dst).join('\n');
 }
 
@@ -268,10 +274,10 @@ async function rawTranslate(settings, text, lang, mode) {
   const cfg = settings.providers[settings.provider] || {};
   const limited = limiterFor(settings.provider);
 
-  if (type === 'aliyun') return withRetry(() => limited(() => aliyunTranslate(text, lang, cfg)));
+  if (type === 'aliyun') return withRetry(() => limited(() => aliyunTranslate(text, lang, cfg, settings)));
   if (type === 'baidu') {
     return withRetry(() => limited(async () => {
-      const out = await baiduTranslate(text, lang, cfg);
+      const out = await baiduTranslate(text, lang, cfg, settings);
       await sleep(1000); // 标准版 QPS=1
       return out;
     }));
@@ -388,7 +394,7 @@ async function translateGroupMerged(settings, texts, lang) {
   if (type === 'aliyun') {
     // 阿里云对 \n 分隔的多段文本按行返回
     return withRetry(() => limited(async () => {
-      const out = await aliyunTranslate(texts.join('\n'), lang, cfg);
+      const out = await aliyunTranslate(texts.join('\n'), lang, cfg, settings);
       const arr = out.split('\n').map((s) => s.trim());
       return arr.length === texts.length ? arr : null;
     }));
@@ -422,7 +428,7 @@ async function translateGroupTexts(texts, lang, settings) {
     try {
       return await translateOne(t, lang);
     } catch (e) {
-      return `〔翻译失败：${e.message}〕`;
+      return tr(settings, 'prefix_failed', { msg: e.message });
     }
   }));
 }
@@ -457,11 +463,11 @@ async function transcribeAudio(dataUrl) {
   const settings = await getSettings();
   const a = settings.asr || {};
   const baseUrl = (a.baseUrl || '').replace(/\/+$/, '');
-  if (!a.apiKey) throw new Error('未配置语音识别 API Key（设置页 → 语音识别）');
-  if (!baseUrl) throw new Error('未配置语音识别 API 地址');
+  if (!a.apiKey) throw new Error(tr(settings, 'err_no_asr_key'));
+  if (!baseUrl) throw new Error(tr(settings, 'err_no_asr_baseurl'));
 
   const presetType = ASR_PRESETS[a.preset]?.type || 'openai';
-  if (presetType === 'gemini') return geminiTranscribe(dataUrl, a, baseUrl);
+  if (presetType === 'gemini') return geminiTranscribe(dataUrl, a, baseUrl, settings);
 
   // OpenAI 兼容 /audio/transcriptions（whisper / SenseVoice / Groq）
   const mime = (dataUrl.match(/^data:(.*?);/) || [])[1] || 'audio/wav';
@@ -478,12 +484,12 @@ async function transcribeAudio(dataUrl) {
     body: fd
   });
   const data = await resp.json().catch(() => ({}));
-  if (!resp.ok) throw new Error(`语音识别接口错误：${data?.error?.message || ('HTTP ' + resp.status)}`);
+  if (!resp.ok) throw new Error(tr(settings, 'err_asr_http', { msg: data?.error?.message || ('HTTP ' + resp.status) }));
   return (data.text || '').trim();
 }
 
 /** Gemini 语音识别：generateContent 传内联音频（有免费额度） */
-async function geminiTranscribe(dataUrl, cfg, baseUrl) {
+async function geminiTranscribe(dataUrl, cfg, baseUrl, settings) {
   const base64 = dataUrl.split(',')[1];
   const mime = (dataUrl.match(/^data:(.*?);/) || [])[1] || 'audio/wav';
   const model = cfg.model || 'gemini-2.5-flash';
@@ -506,7 +512,7 @@ async function geminiTranscribe(dataUrl, cfg, baseUrl) {
   });
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {
-    throw new Error(`Gemini 语音识别错误：${data?.error?.message || ('HTTP ' + resp.status)}`);
+    throw new Error(tr(settings, 'err_gemini_asr', { msg: data?.error?.message || ('HTTP ' + resp.status) }));
   }
   const text = data?.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('').trim();
   return text || '';
@@ -544,7 +550,7 @@ async function startLive(tabId) {
   const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId });
 
   const settings = await getSettings();
-  if (!settings.asr.apiKey) throw new Error('请先在设置页配置语音识别（ASR）API Key');
+  if (!settings.asr.apiKey) throw new Error(tr(settings, 'err_start_live_no_asr'));
 
   if (!(await chrome.offscreen.hasDocument())) {
     await chrome.offscreen.createDocument({
@@ -587,7 +593,7 @@ async function handleAsrSegment(dataUrl) {
   try {
     text = await transcribeAudio(dataUrl);
   } catch (e) {
-    chrome.tabs.sendMessage(session.tabId, { type: 'LIVE_STATUS', status: '语音识别失败：' + e.message }).catch(() => {});
+    chrome.tabs.sendMessage(session.tabId, { type: 'LIVE_STATUS', status: tr(null, 'err_asr_http', { msg: e.message }) }).catch(() => {});
     return;
   }
   if (!text) return; // 静音段
@@ -596,7 +602,7 @@ async function handleAsrSegment(dataUrl) {
   try {
     translation = await translateOne(text, null, 'subtitle');
   } catch (e) {
-    translation = `〔翻译失败：${e.message}〕`;
+    translation = tr(null, 'prefix_failed', { msg: e.message });
   }
   chrome.tabs.sendMessage(session.tabId, { type: 'LIVE_SUBTITLE', original: text, translation }).catch(() => {});
 }
@@ -605,8 +611,8 @@ async function handleAsrSegment(dataUrl) {
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({ id: 'ai-tr-selection', title: 'AI 翻译选中内容', contexts: ['selection'] });
-    chrome.contextMenus.create({ id: 'ai-tr-page', title: 'AI 翻译 / 还原整个网页', contexts: ['page'] });
+    chrome.contextMenus.create({ id: 'ai-tr-selection', title: chrome.i18n.getMessage('menuSelection'), contexts: ['selection'] });
+    chrome.contextMenus.create({ id: 'ai-tr-page', title: chrome.i18n.getMessage('menuPage'), contexts: ['page'] });
   });
 });
 
@@ -643,15 +649,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       const type = PROVIDER_PRESETS[s.provider]?.type || 'llm';
       if (type === 'llm') {
         const r = await callLLM(s, [{ role: 'user', content: '只回复"OK"两个字' }], { maxTokens: 10 });
-        return { ok: true, detail: `模型返回：${r}` };
+        return { ok: true, detailKey: 'test_ok_llm', vars: { text: r } };
       }
       // 阿里云 / 百度：用一次真实翻译做连通性测试
       const r = await translateOne('Hello, world', 'zh-CN');
-      return { ok: true, detail: `翻译测试：Hello, world → ${r}` };
+      return { ok: true, detailKey: 'test_ok_llm', vars: { text: `Hello, world → ${r}` } };
     },
     TEST_ASR: async () => {
       await transcribeAudio(silentWavDataUrl());
-      return { ok: true, detail: '语音识别接口可用' };
+      return { ok: true, detailKey: 'test_ok_asr' };
     }
   };
 

@@ -8,46 +8,52 @@
 <body>
   <div class="header">
     <span class="logo">译</span>
-    <span class="title">AI 实时翻译助手</span>
+    <span class="title" data-i18n="app_name">AI 实时翻译助手</span>
+    <select id="uiLang" class="lang-select">
+      <option value="auto">🌐 Auto</option>
+      <option value="zh-CN">中文</option>
+      <option value="en">EN</option>
+    </select>
   </div>
 
   <div class="row">
-    <label class="row-label">目标语言</label>
+    <label class="row-label" data-i18n="target_lang">目标语言</label>
     <select id="targetLang"></select>
   </div>
 
   <div class="row">
-    <label class="row-label">翻译平台</label>
+    <label class="row-label" data-i18n="provider">翻译平台</label>
     <select id="provider"></select>
   </div>
   <div id="providerInfo" class="provider-info-line"></div>
 
   <div class="row">
-    <label class="row-label">页面显示</label>
+    <label class="row-label" data-i18n="display_mode">页面显示</label>
     <select id="pageDisplayMode">
-      <option value="bilingual">双语对照</option>
-      <option value="replace">仅显示译文</option>
+      <option value="bilingual" data-i18n="display_bilingual">双语对照</option>
+      <option value="replace" data-i18n="display_replace">仅显示译文</option>
     </select>
   </div>
 
   <div class="row checkbox-row">
-    <label><input type="checkbox" id="autoTranslate"> 打开网页时自动翻译</label>
+    <label><input type="checkbox" id="autoTranslate"> <span data-i18n="auto_translate">打开网页时自动翻译</span></label>
   </div>
 
   <div class="actions">
-    <button id="btnPage" class="btn">📄 翻译本页 / 还原</button>
-    <button id="btnSubtitle" class="btn">💬 字幕翻译：<span id="subtitleState">开</span></button>
-    <button id="btnLive" class="btn btn-primary">🔴 开始直播实时翻译</button>
+    <button id="btnPage" class="btn" data-i18n="btn_page">📄 翻译本页 / 还原</button>
+    <button id="btnSubtitle" class="btn"></button>
+    <button id="btnLive" class="btn btn-primary"></button>
   </div>
 
   <div id="status" class="status"></div>
 
   <div class="footer">
-    <a href="#" id="openOptions">⚙️ 设置 API Key</a>
+    <a href="#" id="openOptions" data-i18n="settings_link">⚙️ 设置 API Key</a>
   </div>
 
   <div class="copyright">© RexTian · <a href="https://weibo.com/132666987" target="_blank">微博 @太乙真人</a> · <a href="https://www.rextian.com" target="_blank">rextian.com</a></div>
 
+  <script src="../lib/i18n.js"></script>
   <script type="module" src="popup.js"></script>
 </body>
 </html>

@@ -7,15 +7,13 @@ let mediaStream = null;
 let recorder = null;
 let active = false;
 let segmentMs = 6000;
-let keepAliveCtx = null;
+let playbackCtx = null;
 
 async function startCapture(streamId, seconds) {
   stopCaptureInternal();
   segmentMs = Math.max(3, Number(seconds) || 6) * 1000;
 
   try {
-    // 只请求音频轨：tabCapture 的音频是"复制"而非"移走"，原标签页继续出声。
-    // 若同时请求 video 轨，Chrome 会接管整个标签页媒体流，导致原页面被静音。
     mediaStream = await navigator.mediaDevices.getUserMedia({
       audio: {
         mandatory: {
@@ -29,13 +27,17 @@ async function startCapture(streamId, seconds) {
     return;
   }
 
-  // 保活：AnalyserNode 拉流但不接 destination（无声），
-  // 防止部分 Chrome 版本把 audio-only 捕获流判定为闲置而中断。
+  // 关键：tabCapture 捕获标签页音频后，Chrome 会把原标签页静音（音频被重定向到捕获流）。
+  // 官方做法：在 offscreen 里把捕获流接到 AudioContext.destination 重新播放给用户。
+  // 同时这条播放链路也保证了捕获流持续活跃（无需额外保活）。
   try {
-    keepAliveCtx = new (window.AudioContext || window.webkitAudioContext)();
-    keepAliveCtx.createMediaStreamSource(mediaStream).connect(keepAliveCtx.createAnalyser());
-    keepAliveCtx.resume().catch(() => {});
-  } catch {}
+    playbackCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const source = playbackCtx.createMediaStreamSource(mediaStream);
+    source.connect(playbackCtx.destination);
+    playbackCtx.resume().catch(() => {});
+  } catch (e) {
+    reportError('音频回放初始化失败：' + e.message);
+  }
 
   active = true;
   runSegment();
@@ -152,7 +154,7 @@ function stopCaptureInternal() {
   active = false;
   try { if (recorder && recorder.state !== 'inactive') recorder.stop(); } catch {}
   recorder = null;
-  if (keepAliveCtx) { keepAliveCtx.close().catch(() => {}); keepAliveCtx = null; }
+  if (playbackCtx) { playbackCtx.close().catch(() => {}); playbackCtx = null; }
   if (mediaStream) {
     mediaStream.getTracks().forEach((t) => t.stop());
     mediaStream = null;

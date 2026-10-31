@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "AI 实时翻译助手",
-  "version": "1.2.1",
-  "description": "接入 Kimi、豆包、DeepSeek、智谱 GLM、OpenAI、Gemini、阿里云翻译、百度翻译：划词翻译、整页双语翻译、自动翻译、YouTube 字幕翻译、直播音频实时翻译。开发者：RexTian（微博 @太乙真人 · rextian.com）",
+  "name": "__MSG_appName__",
+  "version": "1.3.0",
+  "description": "__MSG_appDesc__",
+  "default_locale": "zh_CN",
   "author": "RexTian",
   "homepage_url": "https://www.rextian.com",
   "permissions": ["storage", "tabCapture", "offscreen", "contextMenus"],
@@ -14,7 +15,7 @@
   "content_scripts": [
     {
       "matches": ["http://*/*", "https://*/*"],
-      "js": ["content/content.js"],
+      "js": ["lib/i18n.js", "content/content.js"],
       "css": ["content/content.css"],
       "run_at": "document_idle",
       "all_frames": false
@@ -22,7 +23,7 @@
   ],
   "action": {
     "default_popup": "popup/popup.html",
-    "default_title": "AI 实时翻译助手"
+    "default_title": "__MSG_appName__"
   },
   "options_page": "options/options.html",
   "icons": {

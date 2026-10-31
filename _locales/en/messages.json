@@ -1,0 +1,6 @@
+{
+  "appName": { "message": "AI Live Translator" },
+  "appDesc": { "message": "Translate with Kimi, Doubao, DeepSeek, Zhipu GLM, OpenAI, Gemini, Aliyun MT and Baidu: selection translation, full-page bilingual translation, auto-translate, YouTube caption translation, and real-time live audio translation. Developer: RexTian (rextian.com)" },
+  "menuSelection": { "message": "Translate selection with AI" },
+  "menuPage": { "message": "Translate / restore this page with AI" }
+}

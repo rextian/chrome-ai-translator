@@ -84,6 +84,11 @@
     return chrome.runtime.sendMessage(msg).catch((e) => ({ ok: false, error: e.message }));
   }
 
+  /** 文案翻译（跟随界面语言设置） */
+  function tr(key, vars) {
+    return globalThis.AI_TR_I18N.t(state.settings?.uiLang || 'auto', key, vars);
+  }
+
   /* ---------------- Toast ---------------- */
 
   let toastEl = null;
@@ -153,7 +158,7 @@
     selBtn = document.createElement('button');
     selBtn.className = 'ai-tr-selbtn';
     selBtn.textContent = '译';
-    selBtn.title = 'AI 翻译';
+    selBtn.title = tr('sel_btn_title');
     const x = rect.left + window.scrollX + rect.width / 2 - 15;
     const y = rect.bottom + window.scrollY + 8;
     selBtn.style.left = Math.max(4, x) + 'px';
@@ -172,11 +177,11 @@
     selPanel.className = 'ai-tr-panel';
     selPanel.innerHTML = `
       <div class="ai-tr-panel-head">
-        <span class="ai-tr-panel-title">AI 翻译</span>
-        <button class="ai-tr-panel-close" title="关闭">×</button>
+        <span class="ai-tr-panel-title">${tr('panel_title')}</span>
+        <button class="ai-tr-panel-close" title="${tr('close')}">×</button>
       </div>
       <div class="ai-tr-panel-src"></div>
-      <div class="ai-tr-panel-dst ai-tr-panel-loading">翻译中…</div>`;
+      <div class="ai-tr-panel-dst ai-tr-panel-loading">${tr('panel_loading')}</div>`;
     selPanel.querySelector('.ai-tr-panel-src').textContent = text;
     selPanel.querySelector('.ai-tr-panel-close').addEventListener('click', removeSelUI);
 
@@ -190,7 +195,7 @@
     const dst = selPanel && selPanel.querySelector('.ai-tr-panel-dst');
     if (!dst) return;
     dst.classList.remove('ai-tr-panel-loading');
-    dst.textContent = resp?.ok ? resp.translation : ('翻译失败：' + (resp?.error || '未知错误'));
+    dst.textContent = resp?.ok ? resp.translation : tr('translate_failed', { msg: resp?.error || 'unknown' });
   }
 
   /* ---------------- 整页双语翻译 ---------------- */
@@ -260,9 +265,9 @@
   }
 
   async function translatePage() {
-    if (state.pageTranslating) { toast('正在翻译中，请稍候…'); return; }
+    if (state.pageTranslating) { toast(tr('translating_wait')); return; }
     const items = collectElements(document.body, new Set(), MAX_PAGE_ELEMENTS);
-    if (!items.length) { toast('未找到可翻译的文本内容'); return; }
+    if (!items.length) { toast(tr('nothing_to_translate')); return; }
 
     // 视口优先：当前可见区域的段落排最前，先翻先显示；屏外后台继续
     const vh = window.innerHeight;
@@ -277,7 +282,7 @@
     const runId = ++state.pageRunId;
     let done = 0;
     let failed = false;
-    toast(`快速翻译中，共 ${items.length} 段…`, 3000);
+    toast(tr('quick_start', { n: items.length }), 3000);
 
     // 分批 + 滑动窗口（最多 5 批在飞）：避免几十条消息同时挂起导致瞬时压力与卡顿
     const batches = [];
@@ -294,7 +299,7 @@
         if (runId !== state.pageRunId) return; // 用户已还原，丢弃结果
         if (!resp?.ok) {
           failed = true;
-          toast('翻译失败：' + (resp?.error || '未知错误'), 5000);
+          toast(tr('translate_failed', { msg: resp?.error || 'unknown' }), 5000);
           return;
         }
         // rAF 错峰插入，避免同帧大量 DOM 修改造成卡顿
@@ -308,14 +313,14 @@
         }));
         state.pageTranslated = true;
         done += batch.length;
-        toastProgress(`翻译中… ${done}/${items.length}`);
+        toastProgress(tr('progress', { done, total: items.length }));
       }
     }
 
     try {
       await Promise.all(Array.from({ length: Math.min(WINDOW, batches.length) }, worker));
       if (state.pageTranslated && !failed && runId === state.pageRunId) {
-        toast(`翻译完成，共 ${done} 段`, 2500);
+        toast(tr('translate_done', { n: done }), 2500);
       }
     } finally {
       state.pageTranslating = false;
@@ -540,8 +545,8 @@
     box.className = 'ai-tr-live';
     box.innerHTML = `
       <div class="ai-tr-live-head">
-        <span class="ai-tr-live-title"><span class="ai-tr-live-dot"></span>实时翻译中 · 拖动移动</span>
-        <button class="ai-tr-live-close" title="关闭浮窗（后台翻译继续）">×</button>
+        <span class="ai-tr-live-title"><span class="ai-tr-live-dot"></span>${tr('live_title')}</span>
+        <button class="ai-tr-live-close" title="${tr('live_close_tip')}">×</button>
       </div>
       <div class="ai-tr-live-body">
         <div class="ai-tr-live-status" style="display:none"></div>
@@ -616,7 +621,7 @@
     switch (msg?.type) {
       case 'TRANSLATE_SELECTION': {
         const text = (window.getSelection() || '').toString().trim();
-        if (!text) { toast('请先选中要翻译的文字'); return; }
+        if (!text) { toast(tr('select_first')); return; }
         const sel = window.getSelection();
         const rect = sel.rangeCount ? sel.getRangeAt(0).getBoundingClientRect() : { left: 100, bottom: 100, width: 0 };
         removeSelUI();
@@ -628,7 +633,7 @@
           state.pageTranslated = false;
           stopAutoObserver();
           removePageTranslation();
-          toast('已恢复原文');
+          toast(tr('restored'));
         } else {
           translatePage().then(() => {
             if (state.pageTranslated && autoTranslate()) startAutoObserver();
@@ -638,7 +643,7 @@
       case 'LIVE_STARTED':
         ensureLiveBox();
         setLiveStatus('');
-        toast('实时翻译已开始（捕获本页音频中）');
+        toast(tr('live_started_toast'));
         break;
       case 'LIVE_SUBTITLE':
         addLiveLine(msg.original, msg.translation);
@@ -650,7 +655,7 @@
       case 'LIVE_STOPPED':
         setLiveStatus('');
         if (state.liveBox) { state.liveBox.remove(); state.liveBox = null; }
-        toast('实时翻译已停止');
+        toast(tr('live_stopped_toast'));
         break;
     }
   });

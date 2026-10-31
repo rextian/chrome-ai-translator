@@ -1,9 +1,23 @@
 import { PROVIDER_PRESETS, ASR_PRESETS, TARGET_LANGS, DEFAULT_SETTINGS } from '../lib/presets.js';
 
 const $ = (id) => document.getElementById(id);
+const { t } = globalThis.AI_TR_I18N;
 
 let settings = null;
 let saveTimer = null;
+
+function lang() {
+  return settings?.uiLang || 'auto';
+}
+
+function applyI18n() {
+  const l = lang();
+  document.documentElement.lang = l === 'en' ? 'en' : 'zh-CN';
+  document.title = t(l, 'settings_title');
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
+    el.textContent = t(l, el.dataset.i18n);
+  });
+}
 
 function showSaved() {
   const el = $('saveTip');
@@ -142,15 +156,15 @@ function collectAsrFields() {
 
 async function runTest(type, btn, resultEl) {
   btn.disabled = true;
-  resultEl.textContent = '测试中…';
+  resultEl.textContent = t(lang(), 'testing');
   resultEl.className = 'test-result';
   try {
     const resp = await chrome.runtime.sendMessage({ type });
     if (resp?.ok) {
-      resultEl.textContent = '✓ ' + (resp.detail || '连接成功');
+      resultEl.textContent = resp.detailKey ? t(lang(), resp.detailKey, resp.vars || {}) : ('✓ ' + (resp.detail || 'OK'));
       resultEl.classList.add('ok');
     } else {
-      resultEl.textContent = '✗ ' + (resp?.error || '失败');
+      resultEl.textContent = '✗ ' + (resp?.error || 'Error');
       resultEl.classList.add('err');
     }
   } catch (e) {
@@ -199,6 +213,14 @@ async function init() {
   $('showOriginal').checked = settings.showOriginal !== false;
   $('autoTranslate').checked = settings.autoTranslate === true;
   $('pageDisplayMode').value = settings.pageDisplayMode || 'bilingual';
+  $('uiLang').value = settings.uiLang || 'auto';
+  applyI18n();
+
+  $('uiLang').addEventListener('change', () => {
+    settings.uiLang = $('uiLang').value;
+    saveDebounced();
+    applyI18n();
+  });
 
   // ---- 翻译服务事件 ----
   let prevProvider = settings.provider;
