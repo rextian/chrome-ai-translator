@@ -2,3 +2,6 @@
 __MACOSX/
 *.zip
 node_modules/
+
+# 同步服务端数据
+server/sync_data/

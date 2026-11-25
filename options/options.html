@@ -142,6 +142,37 @@
       </div>
     </section>
 
+    <section class="card">
+      <h2 data-i18n="account_title">账号与云同步</h2>
+      <p class="hint" data-i18n="account_e2e_tip"></p>
+
+      <div id="accountLoginForm">
+        <div class="field">
+          <label data-i18n="account_server">服务器</label>
+          <input type="text" id="accountServer" placeholder="https://sync.rextian.com">
+        </div>
+        <div class="field">
+          <label data-i18n="account_username">用户名</label>
+          <input type="text" id="accountUsername" placeholder="3-32 位字母数字" autocomplete="username">
+        </div>
+        <div class="field">
+          <label data-i18n="account_password">密码</label>
+          <input type="password" id="accountPassword" placeholder="至少 8 位" autocomplete="current-password">
+        </div>
+        <button id="btnLogin" class="btn" data-i18n="account_login">登录</button>
+        <button id="btnRegister" class="btn" data-i18n="account_register">注册</button>
+      </div>
+
+      <div id="accountLoggedIn" style="display:none">
+        <div class="field"><span id="accountUserLine"></span></div>
+        <p class="hint" id="accountSyncLine"></p>
+        <button id="btnSyncNow" class="btn" data-i18n="account_sync_now">立即同步</button>
+        <button id="btnLogout" class="btn" data-i18n="account_logout">退出登录</button>
+      </div>
+
+      <div><span id="accountStatus" class="test-result"></span></div>
+    </section>
+
     <div id="saveTip" class="save-tip" data-i18n="saved_tip">设置已自动保存 ✓</div>
 
     <footer class="site-footer">

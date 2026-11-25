@@ -304,6 +304,76 @@ async function init() {
     await save();
     runTest('TEST_ASR', $('testAsr'), $('asrTestResult'));
   });
+
+  initAccountUI();
+}
+
+/* ---------- 账号与云同步 ---------- */
+
+function accountStatus(text, ok = false) {
+  const el = $('accountStatus');
+  el.textContent = text || '';
+  el.className = 'test-result' + (ok ? ' ok' : (text ? ' err' : ''));
+}
+
+async function refreshAccountUI() {
+  const st = await chrome.runtime.sendMessage({ type: 'GET_ACCOUNT_STATE' }).catch(() => null);
+  const loggedIn = !!st?.loggedIn;
+  $('accountLoginForm').style.display = loggedIn ? 'none' : '';
+  $('accountLoggedIn').style.display = loggedIn ? '' : 'none';
+  if (loggedIn) {
+    $('accountUserLine').textContent = t(lang(), 'account_logged_in_as', { name: st.username });
+    $('accountSyncLine').textContent = st.lastSyncAt
+      ? t(lang(), 'account_last_sync', { time: new Date(st.lastSyncAt).toLocaleString() })
+      : t(lang(), 'account_never_sync');
+  } else if (st?.server) {
+    $('accountServer').value = st.server;
+  }
+}
+
+async function accountLogin(kind) {
+  const server = $('accountServer').value.trim();
+  const username = $('accountUsername').value.trim();
+  const password = $('accountPassword').value;
+  if (!server || !username || !password) {
+    accountStatus(t(lang(), 'account_need_fill'));
+    return;
+  }
+  accountStatus(t(lang(), 'account_logging_in'));
+  const resp = await chrome.runtime.sendMessage({
+    type: kind === 'register' ? 'ACCOUNT_REGISTER' : 'ACCOUNT_LOGIN',
+    kind, server, username, password
+  }).catch((e) => ({ ok: false, error: e.message }));
+  if (resp?.ok) {
+    const dirKey = resp.direction === 'down' ? 'account_sync_down' : resp.direction === 'up' ? 'account_sync_up' : null;
+    accountStatus(dirKey ? t(lang(), dirKey) : '', true);
+    $('accountPassword').value = '';
+    refreshAccountUI();
+  } else {
+    accountStatus(t(lang(), 'account_sync_failed', { msg: resp?.error || 'Error' }));
+  }
+}
+
+function initAccountUI() {
+  refreshAccountUI();
+  $('btnLogin').addEventListener('click', () => accountLogin('login'));
+  $('btnRegister').addEventListener('click', () => accountLogin('register'));
+  $('btnSyncNow').addEventListener('click', async () => {
+    accountStatus(t(lang(), 'account_syncing'));
+    const resp = await chrome.runtime.sendMessage({ type: 'SYNC_NOW' }).catch((e) => ({ ok: false, error: e.message }));
+    if (resp?.ok) {
+      const dirKey = resp.direction === 'down' ? 'account_sync_down' : 'account_sync_up';
+      accountStatus(t(lang(), 'account_sync_done') + ' · ' + t(lang(), dirKey), true);
+    } else {
+      accountStatus(t(lang(), 'account_sync_failed', { msg: resp?.error || 'Error' }));
+    }
+    refreshAccountUI();
+  });
+  $('btnLogout').addEventListener('click', async () => {
+    await chrome.runtime.sendMessage({ type: 'ACCOUNT_LOGOUT' }).catch(() => {});
+    accountStatus(t(lang(), 'account_logout_ok'), true);
+    refreshAccountUI();
+  });
 }
 
 init();

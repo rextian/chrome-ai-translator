@@ -4,6 +4,7 @@
 import { PROVIDER_PRESETS, ASR_PRESETS, DEFAULT_SETTINGS, LANG_NAMES, BAIDU_LANG, ALIYUN_LANG } from '../lib/presets.js';
 import { md5 } from '../lib/md5.js';
 import '../lib/i18n.js';
+import { createAccountManager } from './account.js';
 
 /** 界面语言文案（settings.uiLang: auto/zh-CN/en） */
 function tr(settings, key, vars) {
@@ -662,12 +663,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   };
 
   const h = handlers[msg.type];
-  if (!h) return;
+  if (!h && !account.handles.includes(msg.type)) return;
 
   acquireKeepAlive(); // 任务期间保活，防止 SW 在长请求途中被回收
   (async () => {
     try {
-      sendResponse(await h());
+      if (account.handles.includes(msg.type)) {
+        sendResponse(await account.handleMessage(msg));
+      } else {
+        sendResponse(await h());
+      }
     } catch (e) {
       sendResponse({ ok: false, error: e.message });
     } finally {
@@ -675,4 +680,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
   })();
   return true; // 异步响应
+});
+
+/* ---------------- 账号与云同步 ---------------- */
+
+const account = createAccountManager({
+  getSettings,
+  pushSettingsToStorage: async (settings) => {
+    await chrome.storage.sync.set({ settings });
+  },
+  tr
+});
+
+// 设置变化时防抖自动上传（登录状态下）
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'sync' && changes.settings) account.maybeUpload();
 });
