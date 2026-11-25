@@ -1,0 +1,6 @@
+{
+  "appName": { "message": "AI 실시간 번역 도우미" },
+  "appDesc": { "message": "Kimi, Doubao, DeepSeek, Zhipu GLM, OpenAI, Gemini, Aliyun MT, Baidu 번역 지원: 선택 번역, 전체 페이지 이중 언어 번역, 자동 번역, YouTube 자막 번역, 라이브 오디오 실시간 번역. 개발자: RexTian(rextian.com)" },
+  "menuSelection": { "message": "선택 영역 AI 번역" },
+  "menuPage": { "message": "이 페이지 AI 번역 / 원본 복원" }
+}

@@ -1,0 +1,6 @@
+{
+  "appName": { "message": "AI 即時翻譯助手" },
+  "appDesc": { "message": "接入 Kimi、豆包、DeepSeek、智譜 GLM、OpenAI、Gemini、阿里雲翻譯、百度翻譯：劃詞翻譯、整頁雙語翻譯、自動翻譯、YouTube 字幕翻譯、直播音訊即時翻譯。開發者：RexTian（微博 @太乙真人 · rextian.com）" },
+  "menuSelection": { "message": "AI 翻譯選取內容" },
+  "menuPage": { "message": "AI 翻譯 / 還原整個網頁" }
+}

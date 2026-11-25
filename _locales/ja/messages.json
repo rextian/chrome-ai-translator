@@ -1,0 +1,6 @@
+{
+  "appName": { "message": "AI リアルタイム翻訳アシスタント" },
+  "appDesc": { "message": "Kimi、Doubao、DeepSeek、Zhipu GLM、OpenAI、Gemini、Aliyun MT、Baidu 翻訳に対応：選択翻訳、ページ全体の対訳表示、自動翻訳、YouTube 字幕翻訳、ライブ音声のリアルタイム翻訳。開発者：RexTian（rextian.com）" },
+  "menuSelection": { "message": "選択範囲を AI 翻訳" },
+  "menuPage": { "message": "このページを AI 翻訳 / 元に戻す" }
+}

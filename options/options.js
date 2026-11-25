@@ -12,7 +12,7 @@ function lang() {
 
 function applyI18n() {
   const l = lang();
-  document.documentElement.lang = l === 'en' ? 'en' : 'zh-CN';
+  document.documentElement.lang = globalThis.AI_TR_I18N.detect(l);
   document.title = t(l, 'settings_title');
   document.querySelectorAll('[data-i18n]').forEach((el) => {
     el.textContent = t(l, el.dataset.i18n);
