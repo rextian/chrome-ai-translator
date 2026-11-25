@@ -144,3 +144,9 @@ select {
 }
 
 .copyright a:hover { color: #4f7cff; }
+
+.version-line {
+  margin-top: 2px;
+  color: #b8bdd0;
+  letter-spacing: 0.4px;
+}
