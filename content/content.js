@@ -13,6 +13,8 @@
     pageTranslated: false,
     pageTranslating: false,
     processedEls: new WeakSet(),   // 已翻译过的元素（增量去重）
+    translations: new WeakMap(),   // el -> { originalHtml, translation, mode }
+    translatedEls: new Set(),      // 已翻译元素引用（WeakMap 无法遍历，用 Set 记录）
     pageRunId: 0,                  // 翻译周期编号（还原时作废在途批次）
     // 自动翻译增量观察器
     autoObserver: null,
@@ -56,7 +58,8 @@
   }
 
   function displayMode() {
-    return state.settings?.pageDisplayMode === 'replace' ? 'replace' : 'bilingual';
+    const m = state.settings?.pageDisplayMode;
+    return (m === 'replace' || m === 'inplace') ? m : 'bilingual';
   }
 
   chrome.storage.onChanged.addListener((changes, area) => {
@@ -122,6 +125,14 @@
       resp = await sendMsg({ type: 'TRANSLATE_BATCH', texts });
     }
     return resp;
+  }
+
+  /** 下一帧执行；后台标签页/无显示环境下 rAF 不触发，100ms 超时兜底 */
+  function nextFrame() {
+    return new Promise((resolve) => {
+      const timer = setTimeout(resolve, 100);
+      requestAnimationFrame(() => { clearTimeout(timer); resolve(); });
+    });
   }
 
   /* ---------------- 划词翻译 ---------------- */
@@ -239,27 +250,76 @@
     return out;
   }
 
-  /** 把译文应用到元素：双语=插入译文块；仅译文=再隐藏原文 */
+  /** 把译文应用到元素并渲染（按当前显示模式） */
   function applyTranslation(el, translation) {
-    const div = document.createElement('div');
-    div.className = 'ai-tr-block';
-    div.textContent = translation;
-    el.after(div);
-    el.classList.add('ai-tr-origin');
-    if (displayMode() === 'replace') el.classList.add('ai-tr-hidden');
+    if (!state.translations.has(el)) {
+      state.translations.set(el, { originalHtml: el.innerHTML, translation, mode: null });
+      state.translatedEls.add(el);
+    } else {
+      state.translations.get(el).translation = translation;
+    }
+    renderEl(el);
   }
 
-  /** 显示模式切换（双语 ↔ 仅译文） */
+  /**
+   * 按显示模式渲染单个已翻译元素（三种模式可无损切换）：
+   *   bilingual —— 双语对照：原文下方插入译文块
+   *   inplace   —— 原地替换：译文直接替换原文位置，保持原排版（类似谷歌翻译）
+   *   replace   —— 隐藏原文：原文隐藏，显示译文块
+   */
+  function renderEl(el) {
+    const rec = state.translations.get(el);
+    if (!rec || !el.isConnected) return;
+    const mode = displayMode();
+
+    // 从原地替换状态切出：先恢复原始 DOM 结构
+    if (rec.mode === 'inplace' && mode !== 'inplace') {
+      el.innerHTML = rec.originalHtml;
+      rec.mode = null;
+    }
+
+    if (mode === 'inplace') {
+      // 移除译文块（若有），文本直接替换原文
+      const next = el.nextElementSibling;
+      if (next && next.classList.contains('ai-tr-block')) next.remove();
+      el.classList.remove('ai-tr-hidden', 'ai-tr-origin');
+      el.textContent = rec.translation;
+      rec.mode = 'inplace';
+      return;
+    }
+
+    // bilingual / replace：译文块方式
+    let block = el.nextElementSibling;
+    if (!block || !block.classList.contains('ai-tr-block')) {
+      block = document.createElement('div');
+      block.className = 'ai-tr-block';
+      el.after(block);
+    }
+    if (block.textContent !== rec.translation) block.textContent = rec.translation;
+    el.classList.add('ai-tr-origin');
+    el.classList.toggle('ai-tr-hidden', mode === 'replace');
+    rec.mode = mode;
+  }
+
+  /** 显示模式切换：全部已翻译元素按新模式重渲染 */
   function applyDisplayMode() {
-    const hide = displayMode() === 'replace';
-    document.querySelectorAll('.ai-tr-origin').forEach((el) => {
-      el.classList.toggle('ai-tr-hidden', hide);
-    });
+    for (const el of state.translatedEls) {
+      renderEl(el);
+    }
   }
 
   function removePageTranslation() {
+    for (const el of state.translatedEls) {
+      if (!el.isConnected) continue;
+      const rec = state.translations.get(el);
+      // 原地替换模式需恢复原始 DOM 结构
+      if (rec && rec.mode === 'inplace') el.innerHTML = rec.originalHtml;
+      el.classList.remove('ai-tr-origin', 'ai-tr-hidden');
+    }
     document.querySelectorAll('.ai-tr-block').forEach((n) => n.remove());
-    document.querySelectorAll('.ai-tr-origin').forEach((n) => n.classList.remove('ai-tr-origin', 'ai-tr-hidden'));
+    state.translations = new WeakMap();
+    state.translatedEls = new Set();
+    state.processedEls = new WeakSet(); // 允许还原后重新翻译
     state.pageTranslated = false;
     state.pageRunId++; // 作废在途的翻译批次
   }
@@ -302,15 +362,13 @@
           toast(tr('translate_failed', { msg: resp?.error || 'unknown' }), 5000);
           return;
         }
-        // rAF 错峰插入，避免同帧大量 DOM 修改造成卡顿
-        await new Promise((resolve) => requestAnimationFrame(() => {
-          batch.forEach(({ el }, j) => {
-            const t = resp.translations[j];
-            if (!t || !el.isConnected) return;
-            applyTranslation(el, t);
-          });
-          resolve();
-        }));
+        // 错峰插入，避免同帧大量 DOM 修改造成卡顿（rAF 不可用时自动兜底）
+        await nextFrame();
+        batch.forEach(({ el }, j) => {
+          const t = resp.translations[j];
+          if (!t || !el.isConnected) return;
+          applyTranslation(el, t);
+        });
         state.pageTranslated = true;
         done += batch.length;
         toastProgress(tr('progress', { done, total: items.length }));
@@ -409,12 +467,10 @@
         const batch = batches[cursor++];
         const resp = await translateBatchWithRetry(batch.map((b) => b.text));
         if (!resp?.ok || runId !== state.pageRunId || !state.pageTranslated) return;
-        await new Promise((resolve) => requestAnimationFrame(() => {
-          batch.forEach(({ el }, j) => {
-            if (resp.translations[j] && el.isConnected) applyTranslation(el, resp.translations[j]);
-          });
-          resolve();
-        }));
+        await nextFrame();
+        batch.forEach(({ el }, j) => {
+          if (resp.translations[j] && el.isConnected) applyTranslation(el, resp.translations[j]);
+        });
       }
     }));
   }
