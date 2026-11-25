@@ -83,6 +83,27 @@ HTTPS 证书可用 certbot 免费签发：`sudo certbot --nginx -d sync.rextian.
 | GET | `/api/config` | 拉取配置（Bearer）→ `{ciphertext, updatedAt}` |
 | PUT | `/api/config` | 上传配置（Bearer）`{ciphertext, updatedAt}` |
 
+## 4. REXTIAN SSO 统一登录（可选）
+
+插件支持「使用 REXTIAN 账号登录」（主站 `sso.rextian.com` 的 OAuth 授权码模式）。同步服务端通过环境变量对接主站：
+
+```bash
+SSO_CLIENT_ID=client_6ffc31c8d2983e52 \
+SSO_CLIENT_SECRET=<在主站 OAuth 应用管理中复制的 Secret> \
+SSO_TOKEN_URL=https://sso.rextian.com/oauth/token.php \
+SSO_USERINFO_URL=https://sso.rextian.com/oauth/userinfo.php \
+python3 sync_server.py --host 127.0.0.1 --port 8000
+```
+
+**安全要点**：`client_secret` 只配置在这个同步服务端（systemd 的 `Environment=` 或 shell 环境变量），**绝不写入插件代码或提交到公开仓库**。授权码交换（code → access_token → userinfo）全部在服务端完成。
+
+流程：
+1. 插件 `chrome.identity.launchWebAuthFlow` 打开 `oauth/authorize.php`（仅携带公开的 client_id）
+2. 回调拿到授权码 code → 插件 POST 到本服务 `/api/sso/exchange`
+3. 本服务用 secret 换 access_token、拉取用户信息，签发同步 token
+
+SSO 登录的端到端加密：用户首次登录后需设置一个**独立「同步加密密码」**（与 SSO 密码无关），用于本地派生加密密钥——服务端仍无法解密配置。
+
 ## 备注
 
 - 若只想自己/小范围使用，设置 `INVITE_CODE` 环境变量后，注册必须携带该邀请码，防止公开注册被滥用

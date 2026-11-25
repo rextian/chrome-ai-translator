@@ -319,8 +319,10 @@ function accountStatus(text, ok = false) {
 async function refreshAccountUI() {
   const st = await chrome.runtime.sendMessage({ type: 'GET_ACCOUNT_STATE' }).catch(() => null);
   const loggedIn = !!st?.loggedIn;
+  const needPwd = loggedIn && !!st?.needSyncPassword;
   $('accountLoginForm').style.display = loggedIn ? 'none' : '';
-  $('accountLoggedIn').style.display = loggedIn ? '' : 'none';
+  $('accountLoggedIn').style.display = (loggedIn && !needPwd) ? '' : 'none';
+  $('syncPwdArea').style.display = needPwd ? '' : 'none';
   if (loggedIn) {
     $('accountUserLine').textContent = t(lang(), 'account_logged_in_as', { name: st.username });
     $('accountSyncLine').textContent = st.lastSyncAt
@@ -372,6 +374,38 @@ function initAccountUI() {
   $('btnLogout').addEventListener('click', async () => {
     await chrome.runtime.sendMessage({ type: 'ACCOUNT_LOGOUT' }).catch(() => {});
     accountStatus(t(lang(), 'account_logout_ok'), true);
+    refreshAccountUI();
+  });
+
+  // REXTIAN 统一登录（SSO）
+  $('btnSsoLogin').addEventListener('click', async () => {
+    const server = $('accountServer').value.trim() || 'https://sync.rextian.com';
+    accountStatus(t(lang(), 'account_logging_in'));
+    const resp = await chrome.runtime.sendMessage({ type: 'SSO_LOGIN', server }).catch((e) => ({ ok: false, error: e.message }));
+    if (resp?.ok && resp.needSyncPassword) {
+      accountStatus(t(lang(), 'sync_pwd_title'), true);
+    } else if (resp?.ok) {
+      const dirKey = resp.direction === 'down' ? 'account_sync_down' : resp.direction === 'up' ? 'account_sync_up' : null;
+      accountStatus(dirKey ? t(lang(), dirKey) : '', true);
+    } else {
+      accountStatus(t(lang(), 'account_sync_failed', { msg: resp?.error || 'Error' }));
+    }
+    refreshAccountUI();
+  });
+
+  // 设置独立同步加密密码
+  $('btnSetSyncPwd').addEventListener('click', async () => {
+    const pwd = $('syncPassword').value;
+    if (!pwd || pwd.length < 8) { accountStatus(t(lang(), 'account_need_fill')); return; }
+    accountStatus(t(lang(), 'account_syncing'));
+    const resp = await chrome.runtime.sendMessage({ type: 'SET_SYNC_PASSWORD', password: pwd }).catch((e) => ({ ok: false, error: e.message }));
+    if (resp?.ok) {
+      const dirKey = resp.direction === 'down' ? 'account_sync_down' : resp.direction === 'up' ? 'account_sync_up' : null;
+      accountStatus(dirKey ? t(lang(), dirKey) : t(lang(), 'account_sync_done'), true);
+      $('syncPassword').value = '';
+    } else {
+      accountStatus(t(lang(), 'account_sync_failed', { msg: resp?.error || 'Error' }));
+    }
     refreshAccountUI();
   });
 }

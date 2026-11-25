@@ -161,6 +161,19 @@
         </div>
         <button id="btnLogin" class="btn" data-i18n="account_login">登录</button>
         <button id="btnRegister" class="btn" data-i18n="account_register">注册</button>
+        <div class="sso-row">
+          <span class="hint" data-i18n="sso_or">或</span>
+          <button id="btnSsoLogin" class="btn" data-i18n="sso_login_btn">使用 REXTIAN 账号登录</button>
+        </div>
+      </div>
+
+      <div id="syncPwdArea" style="display:none">
+        <p class="hint"><strong data-i18n="sync_pwd_title">设置同步加密密码</strong></p>
+        <p class="hint" data-i18n="sync_pwd_tip"></p>
+        <div class="field">
+          <input type="password" id="syncPassword" placeholder="至少 8 位">
+          <button id="btnSetSyncPwd" class="btn" data-i18n="sync_pwd_submit">设置并完成同步</button>
+        </div>
       </div>
 
       <div id="accountLoggedIn" style="display:none">

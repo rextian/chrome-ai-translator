@@ -20,6 +20,8 @@ import re
 import secrets
 import sqlite3
 import time
+import urllib.request
+import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
@@ -29,6 +31,42 @@ PBKDF2_ITERATIONS = 100_000
 TOKEN_TTL_SECONDS = 30 * 24 * 3600  # 30 天
 MAX_BODY_BYTES = 256 * 1024
 INVITE_CODE = os.environ.get('INVITE_CODE', '')  # 可选：设置后注册需携带邀请码
+
+# ---------------- REXTIAN SSO（OAuth 授权码模式）配置 ----------------
+# client_secret 仅存在于此服务端，绝不下发到插件客户端
+SSO_TOKEN_URL = os.environ.get('SSO_TOKEN_URL', 'https://sso.rextian.com/oauth/token.php')
+SSO_USERINFO_URL = os.environ.get('SSO_USERINFO_URL', 'https://sso.rextian.com/oauth/userinfo.php')
+SSO_CLIENT_ID = os.environ.get('SSO_CLIENT_ID', 'client_6ffc31c8d2983e52')
+SSO_CLIENT_SECRET = os.environ.get('SSO_CLIENT_SECRET', '')  # 生产环境通过环境变量配置
+
+
+def sso_exchange_code(code):
+    """授权码 → access_token → 用户信息。失败抛 ValueError。"""
+    if not SSO_CLIENT_SECRET:
+        raise ValueError('sso_not_configured')
+    form = urllib.parse.urlencode({
+        'grant_type': 'authorization_code',
+        'code': code,
+        'client_id': SSO_CLIENT_ID,
+        'client_secret': SSO_CLIENT_SECRET,
+    }).encode('utf-8')
+    try:
+        req = urllib.request.Request(SSO_TOKEN_URL, data=form)
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            token_data = json.loads(resp.read().decode('utf-8'))
+    except Exception as e:
+        raise ValueError('sso_token_failed: ' + str(e))
+    access_token = token_data.get('access_token')
+    if not access_token:
+        raise ValueError('sso_token_failed: ' + json.dumps(token_data)[:200])
+
+    try:
+        req = urllib.request.Request(SSO_USERINFO_URL, headers={'Authorization': 'Bearer ' + access_token})
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            user = json.loads(resp.read().decode('utf-8'))
+    except Exception as e:
+        raise ValueError('sso_userinfo_failed: ' + str(e))
+    return user
 
 
 def now_ts():
@@ -75,6 +113,18 @@ class DB:
 
     def create_user(self, username, password):
         salt, pw_hash = pbkdf2_hash(password)
+        cur = self.conn.execute(
+            'INSERT INTO users (username, salt, pw_hash, created_at) VALUES (?,?,?,?)',
+            (username, salt, pw_hash, now_ts()))
+        self.conn.commit()
+        return cur.lastrowid
+
+    def find_or_create_sso_user(self, username):
+        """SSO 用户：存在则返回 id，不存在则创建（无本地密码，随机占位哈希）"""
+        row = self.conn.execute('SELECT id FROM users WHERE username=?', (username,)).fetchone()
+        if row:
+            return row[0]
+        salt, pw_hash = pbkdf2_hash(secrets.token_hex(16))
         cur = self.conn.execute(
             'INSERT INTO users (username, salt, pw_hash, created_at) VALUES (?,?,?,?)',
             (username, salt, pw_hash, now_ts()))
@@ -191,6 +241,27 @@ class Handler(BaseHTTPRequestHandler):
             if auth.startswith('Bearer '):
                 self.server.db.revoke_token(auth[7:].strip())
             self.send_json(200, {'ok': True})
+            return
+
+        # SSO 授权码换同步 token（client_secret 仅在本服务端使用）
+        if path == '/api/sso/exchange':
+            data = self.read_body()
+            code = str((data or {}).get('code') or '').strip()
+            if not code:
+                self.send_json(400, {'error': 'bad_request'})
+                return
+            try:
+                user = sso_exchange_code(code)
+            except ValueError as e:
+                self.send_json(401, {'error': str(e)})
+                return
+            username = str(user.get('username') or user.get('name') or user.get('sub') or user.get('id') or '').strip()
+            if not username:
+                self.send_json(400, {'error': 'sso_userinfo_no_username'})
+                return
+            user_id = self.server.db.find_or_create_sso_user(username)
+            token = self.server.db.issue_token(user_id)
+            self.send_json(200, {'token': token, 'username': username})
             return
 
         if path not in ('/api/register', '/api/login'):

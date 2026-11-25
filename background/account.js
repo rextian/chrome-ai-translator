@@ -7,7 +7,9 @@
 import { deriveSyncKey, encryptSettings, decryptSettings } from '../lib/sync-crypto.js';
 
 const DEFAULT_SERVER = 'https://sync.rextian.com';
-const ACCOUNT_TYPES = ['ACCOUNT_REGISTER', 'ACCOUNT_LOGIN', 'ACCOUNT_LOGOUT', 'SYNC_NOW', 'GET_ACCOUNT_STATE'];
+const SSO_AUTHORIZE_URL = 'https://sso.rextian.com/oauth/authorize.php';
+const SSO_CLIENT_ID = 'client_6ffc31c8d2983e52'; // 公开 client_id；secret 仅在同步服务端
+const ACCOUNT_TYPES = ['ACCOUNT_REGISTER', 'ACCOUNT_LOGIN', 'ACCOUNT_LOGOUT', 'SYNC_NOW', 'GET_ACCOUNT_STATE', 'SSO_LOGIN', 'SET_SYNC_PASSWORD'];
 
 export function createAccountManager({ getSettings, pushSettingsToStorage, tr }) {
   let uploadTimer = null;
@@ -90,23 +92,8 @@ export function createAccountManager({ getSettings, pushSettingsToStorage, tr })
     return { ok: true, lastSyncAt: account.lastSyncAt };
   }
 
-  async function loginOrRegister(kind, server, username, password) {
-    server = (server || DEFAULT_SERVER).replace(/\/+$/, '');
-    const data = await apiFetch(server, kind === 'register' ? '/api/register' : '/api/login', {
-      method: 'POST',
-      body: { username, password }
-    });
-    // 派生密钥并导出存本地（仅用于本机加解密）
-    const key = await deriveSyncKey(password, username);
-    const rawBuf = await crypto.subtle.exportKey('raw', key);
-    let bin = '';
-    const arr = new Uint8Array(rawBuf);
-    for (let i = 0; i < arr.length; i++) bin += String.fromCharCode(arr[i]);
-    const keyRaw = btoa(bin);
-
-    await saveAccount({ server, username, token: data.token, keyRaw, lastSyncAt: 0 });
-
-    // 登录后：云端有配置则拉取，否则上传本地
+  /** 登录后的首次同步：云端有配置则拉取，否则上传本地 */
+  async function afterLoginSync() {
     try {
       const dl = await downloadRemoteSettings();
       if (dl.ok) return { ok: true, direction: 'down', lastSyncAt: dl.lastSyncAt };
@@ -116,9 +103,74 @@ export function createAccountManager({ getSettings, pushSettingsToStorage, tr })
       }
       return { ok: true, direction: 'none' };
     } catch (e) {
-      // 登录成功但首次同步失败，保留登录态
       return { ok: true, direction: 'error', error: e.message };
     }
+  }
+
+  async function exportKeyRaw(key) {
+    const rawBuf = await crypto.subtle.exportKey('raw', key);
+    let bin = '';
+    const arr = new Uint8Array(rawBuf);
+    for (let i = 0; i < arr.length; i++) bin += String.fromCharCode(arr[i]);
+    return btoa(bin);
+  }
+
+  async function loginOrRegister(kind, server, username, password) {
+    server = (server || DEFAULT_SERVER).replace(/\/+$/, '');
+    const data = await apiFetch(server, kind === 'register' ? '/api/register' : '/api/login', {
+      method: 'POST',
+      body: { username, password }
+    });
+    // 派生密钥并导出存本地（仅用于本机加解密）
+    const key = await deriveSyncKey(password, username);
+    const keyRaw = await exportKeyRaw(key);
+
+    await saveAccount({ server, username, token: data.token, keyRaw, lastSyncAt: 0 });
+    return afterLoginSync();
+  }
+
+  /** REXTIAN SSO 统一登录（OAuth 授权码模式；code 换 token 在服务端完成） */
+  async function ssoLogin(server) {
+    server = (server || DEFAULT_SERVER).replace(/\/+$/, '');
+    const state = crypto.randomUUID();
+    const redirectUri = chrome.identity.getRedirectURL();
+    const authUrl = SSO_AUTHORIZE_URL
+      + '?client_id=' + encodeURIComponent(SSO_CLIENT_ID)
+      + '&redirect_uri=' + encodeURIComponent(redirectUri)
+      + '&response_type=code&state=' + encodeURIComponent(state);
+
+    let callbackUrl;
+    try {
+      callbackUrl = await chrome.identity.launchWebAuthFlow({ url: authUrl, interactive: true });
+    } catch (e) {
+      return { ok: false, error: tr(null, 'sso_err_cancel') };
+    }
+    if (!callbackUrl) return { ok: false, error: tr(null, 'sso_err_cancel') };
+
+    const params = new URL(callbackUrl).searchParams;
+    if (params.get('state') !== state) return { ok: false, error: tr(null, 'sso_err_state') };
+    const code = params.get('code');
+    if (!code) return { ok: false, error: tr(null, 'sso_err_cancel') };
+
+    const data = await apiFetch(server, '/api/sso/exchange', { method: 'POST', body: { code } });
+    // 若本机此前同账号已设过同步密码则复用其 keyRaw，否则需要用户设置
+    const prev = await getAccount();
+    const reuseKey = prev && prev.username === data.username && prev.keyRaw ? prev.keyRaw : '';
+    await saveAccount({ server, username: data.username, token: data.token, keyRaw: reuseKey, lastSyncAt: 0 });
+
+    if (!reuseKey) return { ok: true, needSyncPassword: true, username: data.username };
+    return afterLoginSync();
+  }
+
+  /** SSO 登录后设置独立同步加密密码 */
+  async function setSyncPassword(password) {
+    const account = await getAccount();
+    if (!account?.token) return { ok: false, error: 'not_logged_in' };
+    if (!password || password.length < 8) return { ok: false, error: tr(null, 'account_need_fill') };
+    const key = await deriveSyncKey(password, account.username);
+    account.keyRaw = await exportKeyRaw(key);
+    await saveAccount(account);
+    return afterLoginSync();
   }
 
   async function logout() {
@@ -174,6 +226,10 @@ export function createAccountManager({ getSettings, pushSettingsToStorage, tr })
             return await logout();
           case 'SYNC_NOW':
             return await syncNow();
+          case 'SSO_LOGIN':
+            return await ssoLogin(msg.server);
+          case 'SET_SYNC_PASSWORD':
+            return await setSyncPassword(msg.password);
           case 'GET_ACCOUNT_STATE': {
             const account = await getAccount();
             return {
@@ -181,7 +237,8 @@ export function createAccountManager({ getSettings, pushSettingsToStorage, tr })
               loggedIn: !!account?.token,
               username: account?.username || '',
               server: account?.server || DEFAULT_SERVER,
-              lastSyncAt: account?.lastSyncAt || 0
+              lastSyncAt: account?.lastSyncAt || 0,
+              needSyncPassword: !!(account?.token && !account?.keyRaw)
             };
           }
         }

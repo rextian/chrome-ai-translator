@@ -1,12 +1,12 @@
 {
   "manifest_version": 3,
   "name": "__MSG_appName__",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "__MSG_appDesc__",
   "default_locale": "zh_CN",
   "author": "RexTian",
   "homepage_url": "https://www.rextian.com",
-  "permissions": ["storage", "tabCapture", "offscreen", "contextMenus"],
+  "permissions": ["storage", "tabCapture", "offscreen", "contextMenus", "identity"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background/service-worker.js",

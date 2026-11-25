@@ -80,6 +80,7 @@
 
 - **端到端加密**：配置在本地用「密码 + 用户名」派生 AES-256-GCM 密钥加密后上传，服务器只存密文，无法读取你的 API Key
 - **同步策略**：谁新用谁（按时间戳）；设置变更后约 2 秒自动上传；也可点「立即同步」手动触发
+- **REXTIAN 统一登录（SSO）**：支持主站 `sso.rextian.com` OAuth 授权码登录（授权码交换在服务端完成，client_secret 不下发）；SSO 登录后设置独立「同步加密密码」保持端到端加密
 - **自建服务端**：`server/sync_server.py`（Python 标准库单文件，SQLite 零依赖），部署见 `server/README.md`，默认 API 地址 `https://sync.rextian.com`
 
 ## 使用
