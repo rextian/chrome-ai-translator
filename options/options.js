@@ -308,7 +308,7 @@ async function init() {
   initAccountUI();
 }
 
-/* ---------- 账号与云同步 ---------- */
+/* ---------- 账号与云同步（直连 SSO） ---------- */
 
 function accountStatus(text, ok = false) {
   const el = $('accountStatus');
@@ -323,70 +323,88 @@ async function refreshAccountUI() {
   $('accountLoginForm').style.display = loggedIn ? 'none' : '';
   $('accountLoggedIn').style.display = (loggedIn && !needPwd) ? '' : 'none';
   $('syncPwdArea').style.display = needPwd ? '' : 'none';
+  if (needPwd) $('registerArea').style.display = 'none';
+  if (st?.configServer !== undefined) $('configServer').value = st.configServer || '';
   if (loggedIn) {
     $('accountUserLine').textContent = t(lang(), 'account_logged_in_as', { name: st.username });
     $('accountSyncLine').textContent = st.lastSyncAt
       ? t(lang(), 'account_last_sync', { time: new Date(st.lastSyncAt).toLocaleString() })
       : t(lang(), 'account_never_sync');
-  } else if (st?.server) {
-    $('accountServer').value = st.server;
   }
 }
 
-async function accountLogin(kind) {
-  const server = $('accountServer').value.trim();
+function directionTip(resp) {
+  if (resp?.noConfigServer) return t(lang(), 'account_login_only_ok');
+  const dirKey = resp.direction === 'down' ? 'account_sync_down' : resp.direction === 'up' ? 'account_sync_up' : null;
+  return dirKey ? t(lang(), dirKey) : t(lang(), 'account_sync_done');
+}
+
+async function accountLogin() {
   const username = $('accountUsername').value.trim();
   const password = $('accountPassword').value;
-  if (!server || !username || !password) {
-    accountStatus(t(lang(), 'account_need_fill'));
-    return;
-  }
+  if (!username || !password) { accountStatus(t(lang(), 'account_need_fill')); return; }
   accountStatus(t(lang(), 'account_logging_in'));
-  const resp = await chrome.runtime.sendMessage({
-    type: kind === 'register' ? 'ACCOUNT_REGISTER' : 'ACCOUNT_LOGIN',
-    kind, server, username, password
-  }).catch((e) => ({ ok: false, error: e.message }));
+  const resp = await chrome.runtime.sendMessage({ type: 'ACCOUNT_LOGIN', username, password }).catch((e) => ({ ok: false, error: e.message }));
   if (resp?.ok) {
-    const dirKey = resp.direction === 'down' ? 'account_sync_down' : resp.direction === 'up' ? 'account_sync_up' : null;
-    accountStatus(dirKey ? t(lang(), dirKey) : '', true);
+    accountStatus(directionTip(resp), true);
     $('accountPassword').value = '';
-    refreshAccountUI();
   } else {
     accountStatus(t(lang(), 'account_sync_failed', { msg: resp?.error || 'Error' }));
   }
+  refreshAccountUI();
 }
 
 function initAccountUI() {
   refreshAccountUI();
-  $('btnLogin').addEventListener('click', () => accountLogin('login'));
-  $('btnRegister').addEventListener('click', () => accountLogin('register'));
-  $('btnSyncNow').addEventListener('click', async () => {
-    accountStatus(t(lang(), 'account_syncing'));
-    const resp = await chrome.runtime.sendMessage({ type: 'SYNC_NOW' }).catch((e) => ({ ok: false, error: e.message }));
+  $('btnLogin').addEventListener('click', accountLogin);
+
+  // 展开/收起注册区
+  $('btnToggleRegister').addEventListener('click', () => {
+    const el = $('registerArea');
+    el.style.display = el.style.display === 'none' ? '' : 'none';
+  });
+
+  // 发送邮箱验证码
+  $('btnSendCode').addEventListener('click', async () => {
+    const email = $('regEmail').value.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { accountStatus(t(lang(), 'account_err_email')); return; }
+    accountStatus(t(lang(), 'account_logging_in'));
+    const resp = await chrome.runtime.sendMessage({ type: 'REGISTER_SEND_CODE', email }).catch((e) => ({ ok: false, error: e.message }));
+    if (resp?.ok) accountStatus(t(lang(), 'account_code_sent'), true);
+    else accountStatus(t(lang(), 'account_sync_failed', { msg: resp?.error || 'Error' }));
+  });
+
+  // 完成注册
+  $('btnDoRegister').addEventListener('click', async () => {
+    const email = $('regEmail').value.trim();
+    const code = $('regCode').value.trim();
+    const password = $('regPassword').value;
+    if (!email || !code || !password) { accountStatus(t(lang(), 'account_need_fill')); return; }
+    accountStatus(t(lang(), 'account_logging_in'));
+    const resp = await chrome.runtime.sendMessage({ type: 'ACCOUNT_REGISTER', email, code, password }).catch((e) => ({ ok: false, error: e.message }));
     if (resp?.ok) {
-      const dirKey = resp.direction === 'down' ? 'account_sync_down' : 'account_sync_up';
-      accountStatus(t(lang(), 'account_sync_done') + ' · ' + t(lang(), dirKey), true);
+      accountStatus(directionTip(resp), true);
+      $('registerArea').style.display = 'none';
     } else {
       accountStatus(t(lang(), 'account_sync_failed', { msg: resp?.error || 'Error' }));
     }
     refreshAccountUI();
   });
-  $('btnLogout').addEventListener('click', async () => {
-    await chrome.runtime.sendMessage({ type: 'ACCOUNT_LOGOUT' }).catch(() => {});
-    accountStatus(t(lang(), 'account_logout_ok'), true);
-    refreshAccountUI();
+
+  // 保存配置存储地址
+  $('btnSaveConfigServer').addEventListener('click', async () => {
+    await chrome.runtime.sendMessage({ type: 'SET_CONFIG_SERVER', configServer: $('configServer').value.trim() }).catch(() => {});
+    accountStatus(t(lang(), 'saved_tip'), true);
   });
 
-  // REXTIAN 统一登录（SSO）
+  // SSO 授权码登录
   $('btnSsoLogin').addEventListener('click', async () => {
-    const server = $('accountServer').value.trim() || 'https://sync.rextian.com';
     accountStatus(t(lang(), 'account_logging_in'));
-    const resp = await chrome.runtime.sendMessage({ type: 'SSO_LOGIN', server }).catch((e) => ({ ok: false, error: e.message }));
+    const resp = await chrome.runtime.sendMessage({ type: 'SSO_LOGIN' }).catch((e) => ({ ok: false, error: e.message }));
     if (resp?.ok && resp.needSyncPassword) {
       accountStatus(t(lang(), 'sync_pwd_title'), true);
     } else if (resp?.ok) {
-      const dirKey = resp.direction === 'down' ? 'account_sync_down' : resp.direction === 'up' ? 'account_sync_up' : null;
-      accountStatus(dirKey ? t(lang(), dirKey) : '', true);
+      accountStatus(directionTip(resp), true);
     } else {
       accountStatus(t(lang(), 'account_sync_failed', { msg: resp?.error || 'Error' }));
     }
@@ -400,12 +418,25 @@ function initAccountUI() {
     accountStatus(t(lang(), 'account_syncing'));
     const resp = await chrome.runtime.sendMessage({ type: 'SET_SYNC_PASSWORD', password: pwd }).catch((e) => ({ ok: false, error: e.message }));
     if (resp?.ok) {
-      const dirKey = resp.direction === 'down' ? 'account_sync_down' : resp.direction === 'up' ? 'account_sync_up' : null;
-      accountStatus(dirKey ? t(lang(), dirKey) : t(lang(), 'account_sync_done'), true);
+      accountStatus(directionTip(resp), true);
       $('syncPassword').value = '';
     } else {
       accountStatus(t(lang(), 'account_sync_failed', { msg: resp?.error || 'Error' }));
     }
+    refreshAccountUI();
+  });
+
+  $('btnSyncNow').addEventListener('click', async () => {
+    accountStatus(t(lang(), 'account_syncing'));
+    const resp = await chrome.runtime.sendMessage({ type: 'SYNC_NOW' }).catch((e) => ({ ok: false, error: e.message }));
+    if (resp?.ok) accountStatus(directionTip(resp), true);
+    else accountStatus(t(lang(), 'account_sync_failed', { msg: resp?.error || 'Error' }));
+    refreshAccountUI();
+  });
+
+  $('btnLogout').addEventListener('click', async () => {
+    await chrome.runtime.sendMessage({ type: 'ACCOUNT_LOGOUT' }).catch(() => {});
+    accountStatus(t(lang(), 'account_logout_ok'), true);
     refreshAccountUI();
   });
 }
