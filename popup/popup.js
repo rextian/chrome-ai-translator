@@ -7,7 +7,7 @@ let settings = null;
 let liveActive = false;
 
 // 发版日期（每次发新包时更新）
-const BUILD_DATE = '2026-11-25';
+const BUILD_DATE = '2026-11-26';
 // 版本号直接读 manifest，保证与包一致
 $('versionInfo').textContent = `v${chrome.runtime.getManifest().version} · ${BUILD_DATE}`;
 

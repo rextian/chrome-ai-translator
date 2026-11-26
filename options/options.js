@@ -179,6 +179,7 @@ async function runTest(type, btn, resultEl) {
 
 async function init() {
   await loadSettings();
+  $('versionInfo').textContent = `v${chrome.runtime.getManifest().version}`;
 
   // 服务商下拉
   for (const [key, p] of Object.entries(PROVIDER_PRESETS)) {
