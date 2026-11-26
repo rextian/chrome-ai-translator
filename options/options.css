@@ -4,7 +4,7 @@ body {
   font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
   background: #f2f4fa;
   color: #242836;
-  padding: 32px 16px 80px;
+  padding: 32px 16px;
 }
 
 .container { max-width: 640px; margin: 0 auto; }
@@ -100,6 +100,7 @@ input:focus, select:focus { border-color: #4f7cff; }
 .save-tip.show { opacity: 1; }
 
 /* 账号与云同步：拉开登录信息、操作按钮和状态提示的层次 */
+.account-card { margin-bottom: 12px; }
 .account-card > .hint { margin-bottom: 16px; }
 .account-card #accountLoginForm,
 .account-card #accountLoggedIn,
@@ -112,6 +113,7 @@ input:focus, select:focus { border-color: #4f7cff; }
 .account-card #accountLoggedIn > .btn { margin-right: 10px; }
 .account-card #syncPwdArea .hint { margin-bottom: 8px; }
 .account-card #accountStatus { display: inline-block; margin: 12px 0 0; line-height: 1.5; }
+.account-card #accountStatus:empty { display: none; }
 .site-footer .version-badge { font-weight: 600; color: #68718a; }
 
 .site-footer {
@@ -119,7 +121,7 @@ input:focus, select:focus { border-color: #4f7cff; }
   font-size: 12.5px;
   color: #8b93ad;
   line-height: 1.9;
-  padding: 8px 0 16px;
+  padding: 8px 0 0;
 }
 
 .site-footer a {
