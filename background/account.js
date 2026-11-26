@@ -51,6 +51,11 @@ export function createAccountManager({ getSettings, pushSettingsToStorage, tr })
 
   async function ssoPost(path, body) {
     await credentialsReady;
+    if (!CLIENT_SECRET) {
+      const err = new Error(tr(null, 'account_err_client'));
+      err.code = 'missing_client_secret';
+      throw err;
+    }
     let resp;
     try {
       resp = await fetch(SSO_BASE + path, {
@@ -321,8 +326,8 @@ export function createAccountManager({ getSettings, pushSettingsToStorage, tr })
 
   function mapError(e) {
     const code = e?.code || e?.message || '';
-    if (code === 'invalid_grant') return tr(null, 'account_err_auth');
-    if (code === 'invalid_client') return tr(null, 'account_err_auth');
+    if (code === 'invalid_grant') return e?.message && e.message !== code ? e.message : tr(null, 'account_err_auth');
+    if (code === 'invalid_client' || code === 'missing_client_secret') return tr(null, 'account_err_client');
     if (code === 40902 || code === '40902') return tr(null, 'account_err_taken');
     if (code === 'invalid_token' || code === 'unauthorized' || code === 401) return tr(null, 'account_err_relogin');
     if (code === 'not_logged_in') return tr(null, 'account_err_relogin');
