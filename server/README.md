@@ -67,10 +67,13 @@ HTTPS 证书可用 certbot 免费签发：`sudo certbot --nginx -d sync.rextian.
 
 ## 3. 插件端配置
 
-设置页 →「账号与云同步」：
-- 服务器：`https://sync.rextian.com`（已预填）
-- 注册用户名 + 密码（≥8 位）→ 自动上传当前配置
-- 其他设备安装插件后登录同一账号 → 自动拉取云端配置
+当前插件不再要求填写服务器地址：
+- 身份认证与配置存储固定使用 `https://sso.rextian.com`
+- 用户在网页完成注册，返回插件输入邮箱/用户名和密码登录
+- 账号返回 `mfa_required` 时，插件会要求输入 6 位验证码，并通过 `mfa_code` 再次提交
+- 配置使用登录密码派生加密密钥，登录后自动上传或拉取配置
+
+本目录的 Python 服务是早期独立 token 体系的参考实现，不是当前插件默认的 `sso.rextian.com` 后台。
 
 ## API 一览
 
@@ -83,9 +86,9 @@ HTTPS 证书可用 certbot 免费签发：`sudo certbot --nginx -d sync.rextian.
 | GET | `/api/config` | 拉取配置（Bearer）→ `{ciphertext, updatedAt}` |
 | PUT | `/api/config` | 上传配置（Bearer）`{ciphertext, updatedAt}` |
 
-## 4. REXTIAN SSO 统一登录（可选）
+## 4. REXTIAN SSO exchange（旧版参考接口）
 
-插件支持「使用 REXTIAN 账号登录」（主站 `sso.rextian.com` 的 OAuth 授权码模式）。同步服务端通过环境变量对接主站：
+当前插件在后台使用 `oauth/token.php` 的密码模式（按需附加 `mfa_code`），不调用本服务的 `/api/sso/exchange`。以下配置仅适用于仍需使用该参考服务的旧版客户端：
 
 ```bash
 SSO_CLIENT_ID=client_6ffc31c8d2983e52 \

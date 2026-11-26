@@ -323,8 +323,6 @@ async function refreshAccountUI() {
   $('accountLoginForm').style.display = loggedIn ? 'none' : '';
   $('accountLoggedIn').style.display = (loggedIn && !needPwd) ? '' : 'none';
   $('syncPwdArea').style.display = needPwd ? '' : 'none';
-  if (needPwd) $('registerArea').style.display = 'none';
-  if (st?.configServer !== undefined) $('configServer').value = st.configServer || '';
   if (loggedIn) {
     $('accountUserLine').textContent = t(lang(), 'account_logged_in_as', { name: st.username });
     $('accountSyncLine').textContent = st.lastSyncAt
@@ -334,7 +332,7 @@ async function refreshAccountUI() {
 }
 
 function directionTip(resp) {
-  if (resp?.noConfigServer) return t(lang(), 'account_login_only_ok');
+  if (resp?.direction === 'error') return t(lang(), 'account_sync_failed', { msg: resp.error || 'Error' });
   const dirKey = resp.direction === 'down' ? 'account_sync_down' : resp.direction === 'up' ? 'account_sync_up' : null;
   return dirKey ? t(lang(), dirKey) : t(lang(), 'account_sync_done');
 }
@@ -342,14 +340,28 @@ function directionTip(resp) {
 async function accountLogin() {
   const username = $('accountUsername').value.trim();
   const password = $('accountPassword').value;
+  const mfaCode = $('accountMfaCode').value.trim();
+  const mfaVisible = $('mfaArea').style.display !== 'none';
   if (!username || !password) { accountStatus(t(lang(), 'account_need_fill')); return; }
+  if (mfaVisible && !/^\d{6}$/.test(mfaCode)) {
+    accountStatus(t(lang(), 'account_mfa_required'));
+    $('accountMfaCode').focus();
+    return;
+  }
+
   accountStatus(t(lang(), 'account_logging_in'));
-  const resp = await chrome.runtime.sendMessage({ type: 'ACCOUNT_LOGIN', username, password }).catch((e) => ({ ok: false, error: e.message }));
-  if (resp?.ok) {
-    accountStatus(directionTip(resp), true);
+  const resp = await chrome.runtime.sendMessage({ type: 'ACCOUNT_LOGIN', username, password, mfaCode }).catch((e) => ({ ok: false, error: e.message }));
+  if (resp?.mfaRequired) {
+    $('mfaArea').style.display = '';
+    $('accountMfaCode').focus();
+    accountStatus(resp.error || t(lang(), 'account_mfa_required'));
+  } else if (resp?.ok) {
+    accountStatus(directionTip(resp), resp.direction !== 'error');
     $('accountPassword').value = '';
+    $('accountMfaCode').value = '';
+    $('mfaArea').style.display = 'none';
   } else {
-    accountStatus(t(lang(), 'account_sync_failed', { msg: resp?.error || 'Error' }));
+    accountStatus(t(lang(), 'account_login_failed', { msg: resp?.error || 'Error' }));
   }
   refreshAccountUI();
 }
@@ -357,58 +369,17 @@ async function accountLogin() {
 function initAccountUI() {
   refreshAccountUI();
   $('btnLogin').addEventListener('click', accountLogin);
-
-  // 展开/收起注册区
-  $('btnToggleRegister').addEventListener('click', () => {
-    const el = $('registerArea');
-    el.style.display = el.style.display === 'none' ? '' : 'none';
+  ['accountUsername', 'accountPassword'].forEach((id) => $(id).addEventListener('input', () => {
+    $('mfaArea').style.display = 'none';
+    $('accountMfaCode').value = '';
+  }));
+  $('accountMfaCode').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') accountLogin();
   });
 
-  // 发送邮箱验证码
-  $('btnSendCode').addEventListener('click', async () => {
-    const email = $('regEmail').value.trim();
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { accountStatus(t(lang(), 'account_err_email')); return; }
-    accountStatus(t(lang(), 'account_logging_in'));
-    const resp = await chrome.runtime.sendMessage({ type: 'REGISTER_SEND_CODE', email }).catch((e) => ({ ok: false, error: e.message }));
-    if (resp?.ok) accountStatus(t(lang(), 'account_code_sent'), true);
-    else accountStatus(t(lang(), 'account_sync_failed', { msg: resp?.error || 'Error' }));
-  });
-
-  // 完成注册
-  $('btnDoRegister').addEventListener('click', async () => {
-    const email = $('regEmail').value.trim();
-    const code = $('regCode').value.trim();
-    const password = $('regPassword').value;
-    if (!email || !code || !password) { accountStatus(t(lang(), 'account_need_fill')); return; }
-    accountStatus(t(lang(), 'account_logging_in'));
-    const resp = await chrome.runtime.sendMessage({ type: 'ACCOUNT_REGISTER', email, code, password }).catch((e) => ({ ok: false, error: e.message }));
-    if (resp?.ok) {
-      accountStatus(directionTip(resp), true);
-      $('registerArea').style.display = 'none';
-    } else {
-      accountStatus(t(lang(), 'account_sync_failed', { msg: resp?.error || 'Error' }));
-    }
-    refreshAccountUI();
-  });
-
-  // 保存配置存储地址
-  $('btnSaveConfigServer').addEventListener('click', async () => {
-    await chrome.runtime.sendMessage({ type: 'SET_CONFIG_SERVER', configServer: $('configServer').value.trim() }).catch(() => {});
-    accountStatus(t(lang(), 'saved_tip'), true);
-  });
-
-  // SSO 授权码登录
-  $('btnSsoLogin').addEventListener('click', async () => {
-    accountStatus(t(lang(), 'account_logging_in'));
-    const resp = await chrome.runtime.sendMessage({ type: 'SSO_LOGIN' }).catch((e) => ({ ok: false, error: e.message }));
-    if (resp?.ok && resp.needSyncPassword) {
-      accountStatus(t(lang(), 'sync_pwd_title'), true);
-    } else if (resp?.ok) {
-      accountStatus(directionTip(resp), true);
-    } else {
-      accountStatus(t(lang(), 'account_sync_failed', { msg: resp?.error || 'Error' }));
-    }
-    refreshAccountUI();
+  // 在 REXTIAN 网页注册，完成后返回本页使用账号密码登录
+  $('btnRegister').addEventListener('click', () => {
+    chrome.tabs.create({ url: 'https://sso.rextian.com/register.php' });
   });
 
   // 设置独立同步加密密码
@@ -418,7 +389,7 @@ function initAccountUI() {
     accountStatus(t(lang(), 'account_syncing'));
     const resp = await chrome.runtime.sendMessage({ type: 'SET_SYNC_PASSWORD', password: pwd }).catch((e) => ({ ok: false, error: e.message }));
     if (resp?.ok) {
-      accountStatus(directionTip(resp), true);
+      accountStatus(directionTip(resp), resp.direction !== 'error');
       $('syncPassword').value = '';
     } else {
       accountStatus(t(lang(), 'account_sync_failed', { msg: resp?.error || 'Error' }));

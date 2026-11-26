@@ -41,13 +41,12 @@ const check = (name, cond) => { console.log((cond ? 'PASS' : 'FAIL') + ' ' + nam
 const send = await account.handleMessage({ type: 'REGISTER_SEND_CODE', email: 'new@example.com' });
 check('发送验证码成功', send.ok === true);
 
-// 2. 完成注册（注册即登录，未配置存储 → noConfigServer）
+// 2. 完成注册（注册即登录，固定配置存储，云端空 → 上传）
 const reg = await account.handleMessage({ type: 'ACCOUNT_REGISTER', email: 'new@example.com', code: '123456', password: 'test-password-123' });
 check('注册成功', reg.ok === true);
-check('未配置存储时仅登录不同步', reg.noConfigServer === true);
+check('注册后自动上传本地配置', reg.direction === 'up');
 
-// 3. 配置存储地址
-await account.handleMessage({ type: 'SET_CONFIG_SERVER', configServer: MOCK });
+// 3. 登录态与固定存储地址
 const st = await account.handleMessage({ type: 'GET_ACCOUNT_STATE' });
 check('登录态与存储地址正确', st.loggedIn === true && st.configServer === MOCK);
 

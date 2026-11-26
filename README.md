@@ -13,7 +13,7 @@
 | 自动翻译 | 打开网页自动检测语言并翻译（已是目标语言则跳过）；无限滚动页面自动增量翻译新内容 |
 | 显示模式 | 双语对照（原文+译文）、直接替换原文（类似谷歌翻译，保持原排版）、仅显示译文（隐藏原文），三档随时无损切换 |
 | 中英双语界面 | 扩展 UI 支持 简体中文 / 繁體中文 / 日本語 / 한국어 / English，可跟随浏览器或手动切换 |
-| 账号云同步 | 注册账号后配置（含各平台密钥）端到端加密云同步，新设备登录自动拉取；可搭配自建服务端（server/ 目录，单文件 Python 零依赖） |
+| 账号云同步 | 网页注册后使用 REXTIAN 账号密码登录（支持动态 2FA），配置（含各平台密钥）端到端加密云同步，新设备登录自动拉取；身份认证与配置存储均固定走 `sso.rextian.com` |
 | 多平台切换 | 弹窗中一键切换翻译平台，某个平台失效时可立即切换备用 |
 | YouTube 字幕翻译 | 自动捕获视频/直播的 CC 字幕，译文浮层显示在播放器内 |
 | 直播实时翻译（音频） | 捕获标签页音频 → 语音识别 → AI 翻译，实时字幕浮窗显示（可拖拽、支持全屏），原视频声音正常播放 |
@@ -76,23 +76,38 @@
 
 ## 账号云同步（可选）
 
-设置页 →「账号与云同步」：**直连你的 SSO**（`sso.rextian.com`），支持邮箱验证码注册、密码登录、REXTIAN 授权码登录，配置自动同步到其他设备。
+设置页 →「账号与云同步」：点击「注册新账号」会在新标签页打开 `https://sso.rextian.com/register.php`。注册完成后返回插件，输入邮箱/用户名和密码登录；账号开启两步验证时，再输入身份验证器中的 6 位验证码。
 
-- **身份认证直连 SSO**：注册（邮箱验证码两步）/ 登录（密码模式）/ 授权码登录，token 自动刷新（旋转）、登出注销
-- **端到端加密**：配置在本地用「密码 + 用户名」派生 AES-256-GCM 密钥加密后上传，存储服务端只存密文
-- **配置存储服务可插拔**：「配置存储 API」地址可配置——你的存储系统按下方协议实现后填入即可；留空则仅登录不同步
+- **身份认证直连 SSO**：使用 `oauth/token.php` 的密码模式；根据 `mfa_required` 动态显示 2FA 输入框，token 自动刷新（旋转）、登出注销，无需 Google 回调域名
+- **端到端加密**：配置使用登录密码在本地派生 AES-256-GCM 密钥加密后上传，存储服务端只存密文，无需额外设置同步密码
+- **配置存储固定走 SSO**：身份认证与配置存储均使用 `https://sso.rextian.com`，设置页无需填写服务器地址
 - **同步策略**：谁新用谁（按时间戳）；设置变更后约 2 秒自动上传；也可点「立即同步」手动触发
-- **SSO 授权码登录**：首次登录后设置独立「同步加密密码」保持端到端加密
 
-### 配置存储服务协议（自建存储系统时遵循）
+### 本地 SSO 凭据
+
+源码运行时，将 `background/sso-credentials.example.js` 复制为 `background/sso-credentials.local.js`，填入自己的 `CLIENT_ID` 和 `CLIENT_SECRET`。`sso-credentials.local.js` 已被 `.gitignore` 排除，不会上传 GitHub。
+
+### 2FA 接口约定
+
+首次密码登录返回 `error: "mfa_required"` 时，插件显示验证码输入框；第二次登录仍提交用户名和密码，并附加：
+
+```json
+{"grant_type":"password","username":"...","password":"...","mfa_code":"123456"}
+```
+
+> 该流程需要 SSO 的 `oauth/token.php` 支持校验 `mfa_code`。如果服务端仍只返回 `mfa_required` 而不接受该字段，需先更新服务端，2FA 账号才能完成密码模式登录。
+
+### 配置存储接口
 
 ```
-GET  {存储地址}/api/config     → 返回 {"ciphertext": "...", "updatedAt": 1764000000}（无配置返回 404）
-PUT  {存储地址}/api/config     → 上传 {"ciphertext": "...", "updatedAt": 1764000000}
+GET  https://sso.rextian.com/api/config.php?namespace=chrome-ai-translator
+     → 返回 {"ciphertext": "...", "updatedAt": 1764000000}（无配置返回 404）
+PUT  https://sso.rextian.com/api/config.php
+     → 上传 {"namespace":"chrome-ai-translator","ciphertext":"...","updatedAt":1764000000}
 鉴权：请求头 Authorization: Bearer <SSO access_token>
 ```
 
-ciphertext 为插件端到端加密后的配置密文（服务端无需也无法解密）。原 `server/sync_server.py` 为可选参考实现（自带独立 token 体系，与 SSO access_token 不同，二选一使用）。
+ciphertext 为插件端到端加密后的配置密文（服务端无需也无法解密）。`server/sync_server.py` 是早期独立 token 体系的参考实现；当前插件固定使用 SSO access_token，部署配置接口时需确保与该鉴权方式兼容。
 
 ## 使用
 

@@ -5,3 +5,6 @@ node_modules/
 
 # 同步服务端数据
 server/sync_data/
+
+# 本地 SSO 凭据（绝不提交）
+background/sso-credentials.local.js

@@ -2,27 +2,35 @@
  * 账号与云同步管理（直连 REXTIAN SSO）
  *
  * 身份认证全部直连 sso.rextian.com：
- *   登录 /oauth/token.php (grant_type=password)
+ *   登录 /oauth/token.php (grant_type=password，两步验证时附加 mfa_code)
  *   注册 /api/auth/register/send-code.php + register.php（邮箱验证码两步）
- *   授权码登录 oauth/authorize.php + token.php (authorization_code)
  *   刷新 /oauth/token.php (grant_type=refresh_token，旋转更新)
  *   注销 /oauth/revoke.php
  *
- * 配置存储走「可配置的存储服务地址」（configServer）：
- *   GET  {configServer}/api/config   Bearer <access_token> → {ciphertext, updatedAt}
- *   PUT  {configServer}/api/config   Bearer <access_token> {ciphertext, updatedAt}
- * 留空则仅登录、不做配置同步。
+ * 配置存储固定走 sso.rextian.com：
+ *   GET  /api/config.php?namespace=chrome-ai-translator   Bearer <access_token> → {ciphertext, updatedAt}
+ *   PUT  /api/config.php   Bearer <access_token> {namespace, ciphertext, updatedAt}
+ * 前端无需配置服务器地址，登录后自动同步。
  *
- * 安全说明：client_secret 内置于此（直连模式不可避免），泄露时请在 SSO 后台「重置密钥」。
+ * 安全说明：client_secret 从 background/sso-credentials.local.js 读取，
+ * 该文件由 .gitignore 排除，不上传 GitHub；泄露时请在 SSO 后台「重置密钥」。
  */
 import { deriveSyncKey, encryptSettings, decryptSettings } from '../lib/sync-crypto.js';
 
 const SSO_BASE = 'https://sso.rextian.com';
-const CLIENT_ID = 'client_6ffc31c8d2983e52';
-const CLIENT_SECRET = '35517d81d4391226a616b85db5094010491b341035e6c8f9';
+const CONFIG_SERVER = SSO_BASE;
+const CONFIG_NAMESPACE = 'chrome-ai-translator';
+let CLIENT_ID = 'client_6ffc31c8d2983e52';
+let CLIENT_SECRET = '';
+const credentialsReady = import('./sso-credentials.local.js')
+  .then((local) => {
+    CLIENT_ID = local.CLIENT_ID || CLIENT_ID;
+    CLIENT_SECRET = local.CLIENT_SECRET || CLIENT_SECRET;
+  })
+  .catch(() => { /* 未创建本地凭据文件时保持空 Secret */ });
 const ACCOUNT_TYPES = [
   'ACCOUNT_REGISTER', 'ACCOUNT_LOGIN', 'ACCOUNT_LOGOUT', 'SYNC_NOW', 'GET_ACCOUNT_STATE',
-  'SSO_LOGIN', 'SET_SYNC_PASSWORD', 'REGISTER_SEND_CODE', 'SET_CONFIG_SERVER'
+  'SET_SYNC_PASSWORD', 'REGISTER_SEND_CODE'
 ];
 
 export function createAccountManager({ getSettings, pushSettingsToStorage, tr }) {
@@ -31,7 +39,8 @@ export function createAccountManager({ getSettings, pushSettingsToStorage, tr })
 
   async function getAccount() {
     const { account } = await chrome.storage.local.get('account');
-    return account || null;
+    // 兼容旧版本地数据，但始终忽略用户此前填写的存储地址
+    return account ? Object.assign({}, account, { configServer: CONFIG_SERVER }) : null;
   }
 
   async function saveAccount(account) {
@@ -41,6 +50,7 @@ export function createAccountManager({ getSettings, pushSettingsToStorage, tr })
   /* ---------------- SSO 接口 ---------------- */
 
   async function ssoPost(path, body) {
+    await credentialsReady;
     let resp;
     try {
       resp = await fetch(SSO_BASE + path, {
@@ -116,7 +126,7 @@ export function createAccountManager({ getSettings, pushSettingsToStorage, tr })
     const prev = await getAccount();
     const account = {
       server: SSO_BASE,
-      configServer: prev?.configServer || '',
+      configServer: CONFIG_SERVER,
       username,
       accessToken,
       refreshToken,
@@ -145,14 +155,15 @@ export function createAccountManager({ getSettings, pushSettingsToStorage, tr })
     return account;
   }
 
-  /* ---------------- 配置存储（可配置地址） ---------------- */
+  /* ---------------- 配置存储（固定 SSO 地址与命名空间） ---------------- */
 
   async function configFetch(path, { method = 'GET', body } = {}) {
     const account = await refreshIfNeeded();
-    if (!account.configServer) throw new Error('no_config_server');
+    const url = new URL(CONFIG_SERVER + path);
+    url.searchParams.set('namespace', CONFIG_NAMESPACE);
     let resp;
     try {
-      resp = await fetch(account.configServer.replace(/\/+$/, '') + path, {
+      resp = await fetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
@@ -178,9 +189,9 @@ export function createAccountManager({ getSettings, pushSettingsToStorage, tr })
     settings._updatedAt = Date.now();
     const key = await keyFromRaw(account.keyRaw);
     const ciphertext = await encryptSettings(key, settings);
-    await configFetch('/api/config', {
+    await configFetch('/api/config.php', {
       method: 'PUT',
-      body: { ciphertext, updatedAt: settings._updatedAt }
+      body: { namespace: CONFIG_NAMESPACE, ciphertext, updatedAt: settings._updatedAt }
     });
     suppressUntil = Date.now() + 1500;
     await pushSettingsToStorage(settings);
@@ -193,7 +204,7 @@ export function createAccountManager({ getSettings, pushSettingsToStorage, tr })
     const account = await getAccount();
     let remote;
     try {
-      remote = await configFetch('/api/config');
+      remote = await configFetch('/api/config.php');
     } catch (e) {
       if (e.code === 'not_found' || e.code === 404) return { ok: false, empty: true };
       throw e;
@@ -207,10 +218,9 @@ export function createAccountManager({ getSettings, pushSettingsToStorage, tr })
     return { ok: true, lastSyncAt: account.lastSyncAt };
   }
 
-  /** 登录后的首次同步：有存储地址才同步，云端有则拉取、无则上传 */
+  /** 登录后的首次同步：云端有则拉取、无则上传 */
   async function afterLoginSync() {
     const account = await getAccount();
-    if (!account.configServer) return { ok: true, direction: 'none', noConfigServer: true };
     if (!account.keyRaw) return { ok: true, needSyncPassword: true, username: account.username };
     try {
       const dl = await downloadRemoteSettings();
@@ -227,45 +237,28 @@ export function createAccountManager({ getSettings, pushSettingsToStorage, tr })
 
   /* ---------------- 登录 / 注册 ---------------- */
 
-  async function login(username, password) {
-    const data = await ssoPost('/oauth/token.php', {
-      grant_type: 'password', username, password
-    });
+  async function login(username, password, mfaCode) {
+    mfaCode = (mfaCode || '').trim();
+    let data;
+    try {
+      const body = { grant_type: 'password', username, password };
+      if (mfaCode) body.mfa_code = mfaCode;
+      data = await ssoPost('/oauth/token.php', body);
+    } catch (e) {
+      if (e.code === 'mfa_required') {
+        return { ok: false, mfaRequired: true, error: tr(null, 'account_mfa_required') };
+      }
+      if (mfaCode && ['invalid_grant', 'mfa_invalid', 'invalid_mfa'].includes(e.code)) {
+        return { ok: false, mfaRequired: true, error: tr(null, 'account_mfa_invalid') };
+      }
+      throw e;
+    }
     const payload = tokenPayload(data);
-    // 登录密码即派生密钥（E2E）
+    if (!payload.user) payload.user = await ssoUserinfo(payload.accessToken);
+    // 登录密码即派生密钥（E2E），无需额外设置同步密码
     const key = await deriveSyncKey(password, payload.user?.username || username);
     const keyRaw = await exportKeyRaw(key);
     await saveLoginState(payload, keyRaw);
-    return afterLoginSync();
-  }
-
-  async function ssoLoginOAuth() {
-    const state = crypto.randomUUID();
-    const redirectUri = chrome.identity.getRedirectURL();
-    const authUrl = SSO_BASE + '/oauth/authorize.php'
-      + '?client_id=' + encodeURIComponent(CLIENT_ID)
-      + '&redirect_uri=' + encodeURIComponent(redirectUri)
-      + '&response_type=code&scope=' + encodeURIComponent('openid profile email')
-      + '&state=' + encodeURIComponent(state);
-
-    let callbackUrl;
-    try {
-      callbackUrl = await chrome.identity.launchWebAuthFlow({ url: authUrl, interactive: true });
-    } catch {
-      return { ok: false, error: tr(null, 'sso_err_cancel') };
-    }
-    if (!callbackUrl) return { ok: false, error: tr(null, 'sso_err_cancel') };
-
-    const params = new URL(callbackUrl).searchParams;
-    if (params.get('state') !== state) return { ok: false, error: tr(null, 'sso_err_state') };
-    const code = params.get('code');
-    if (!code) return { ok: false, error: tr(null, 'sso_err_cancel') };
-
-    const data = await ssoPost('/oauth/token.php', {
-      grant_type: 'authorization_code', code, redirect_uri: redirectUri
-    });
-    const payload = tokenPayload(data);
-    await saveLoginState(payload, null); // SSO 场景密钥由「独立同步密码」派生
     return afterLoginSync();
   }
 
@@ -309,10 +302,9 @@ export function createAccountManager({ getSettings, pushSettingsToStorage, tr })
   async function syncNow() {
     const account = await getAccount();
     if (!account?.accessToken) return { ok: false, error: 'not_logged_in' };
-    if (!account.configServer) return { ok: false, error: 'no_config_server' };
     let remoteUpdatedAt = 0;
     try {
-      const remote = await configFetch('/api/config');
+      const remote = await configFetch('/api/config.php');
       remoteUpdatedAt = remote.updatedAt || 0;
     } catch (e) {
       if (!(e.code === 'not_found' || e.code === 404)) throw e;
@@ -332,9 +324,8 @@ export function createAccountManager({ getSettings, pushSettingsToStorage, tr })
     if (code === 'invalid_grant') return tr(null, 'account_err_auth');
     if (code === 'invalid_client') return tr(null, 'account_err_auth');
     if (code === 40902 || code === '40902') return tr(null, 'account_err_taken');
-    if (code === 'invalid_token' || code === 401) return tr(null, 'account_err_relogin');
+    if (code === 'invalid_token' || code === 'unauthorized' || code === 401) return tr(null, 'account_err_relogin');
     if (code === 'not_logged_in') return tr(null, 'account_err_relogin');
-    if (code === 'no_config_server') return tr(null, 'account_config_server_tip');
     return e?.message || String(code);
   }
 
@@ -346,26 +337,18 @@ export function createAccountManager({ getSettings, pushSettingsToStorage, tr })
         switch (msg.type) {
           case 'ACCOUNT_LOGIN':
             if (!msg.username || !msg.password) return { ok: false, error: tr(null, 'account_need_fill') };
-            return await login(msg.username, msg.password);
+            return await login(msg.username, msg.password, msg.mfaCode);
           case 'REGISTER_SEND_CODE':
             return await registerSendCode(msg.email);
           case 'ACCOUNT_REGISTER':
             if (!msg.email || !msg.code || !msg.password) return { ok: false, error: tr(null, 'account_need_fill') };
             return await registerCreate(msg.email, msg.code, msg.password, msg.displayName);
-          case 'SSO_LOGIN':
-            return await ssoLoginOAuth();
           case 'SET_SYNC_PASSWORD':
             return await setSyncPassword(msg.password);
           case 'ACCOUNT_LOGOUT':
             return await logout();
           case 'SYNC_NOW':
             return await syncNow();
-          case 'SET_CONFIG_SERVER': {
-            const account = (await getAccount()) || {};
-            account.configServer = (msg.configServer || '').trim().replace(/\/+$/, '');
-            await saveAccount(account);
-            return { ok: true };
-          }
           case 'GET_ACCOUNT_STATE': {
             const account = await getAccount();
             return {
@@ -373,9 +356,9 @@ export function createAccountManager({ getSettings, pushSettingsToStorage, tr })
               loggedIn: !!account?.accessToken,
               username: account?.username || '',
               server: SSO_BASE,
-              configServer: account?.configServer || '',
+              configServer: CONFIG_SERVER,
               lastSyncAt: account?.lastSyncAt || 0,
-              needSyncPassword: !!(account?.accessToken && account.configServer && !account?.keyRaw)
+              needSyncPassword: !!(account?.accessToken && !account?.keyRaw)
             };
           }
         }
@@ -384,13 +367,13 @@ export function createAccountManager({ getSettings, pushSettingsToStorage, tr })
       }
     },
 
-    /** settings 变化时防抖自动上传（登录且已配置存储地址） */
+    /** settings 变化时防抖自动上传（登录且已设置同步密钥） */
     maybeUpload() {
       if (Date.now() < suppressUntil) return;
       clearTimeout(uploadTimer);
       uploadTimer = setTimeout(async () => {
         const account = await getAccount();
-        if (!account?.accessToken || !account.configServer || !account.keyRaw) return;
+        if (!account?.accessToken || !account.keyRaw) return;
         try { await uploadCurrentSettings(); } catch { /* 静默失败 */ }
       }, 2000);
     }

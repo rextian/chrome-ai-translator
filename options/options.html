@@ -155,40 +155,17 @@
           <label data-i18n="account_password">密码</label>
           <input type="password" id="accountPassword" placeholder="至少 8 位" autocomplete="current-password">
         </div>
+        <div class="field" id="mfaArea" style="display:none">
+          <label data-i18n="account_mfa_code">两步验证码</label>
+          <input type="text" id="accountMfaCode" placeholder="6 位数字" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}">
+        </div>
         <button id="btnLogin" class="btn" data-i18n="account_login">登录</button>
-        <button id="btnToggleRegister" class="btn" data-i18n="account_register_title">注册新账号</button>
-        <div class="sso-row">
-          <span class="hint" data-i18n="sso_or">或</span>
-          <button id="btnSsoLogin" class="btn" data-i18n="sso_login_btn">使用 REXTIAN 账号登录</button>
-        </div>
+        <button id="btnRegister" class="btn" data-i18n="account_register_title">注册新账号</button>
+        <p class="hint" data-i18n="account_password_hint">使用 REXTIAN 邮箱或用户名和密码直接登录。若账号已开启两步验证，会再要求输入 6 位验证码。</p>
+        <p class="hint" data-i18n="account_register_web_hint">将在新标签页打开 REXTIAN 注册页。注册完成后，请返回本页点击登录。</p>
       </div>
 
-      <!-- 注册区（邮箱验证码两步） -->
-      <div id="registerArea" style="display:none">
-        <div class="field">
-          <label data-i18n="account_email">邮箱</label>
-          <input type="email" id="regEmail" placeholder="you@example.com">
-          <button id="btnSendCode" class="btn" data-i18n="account_send_code">发送验证码</button>
-        </div>
-        <div class="field">
-          <label data-i18n="account_code">验证码</label>
-          <input type="text" id="regCode" placeholder="6 位数字" maxlength="6">
-        </div>
-        <div class="field">
-          <label data-i18n="account_password">密码</label>
-          <input type="password" id="regPassword" placeholder="至少 8 位">
-        </div>
-        <button id="btnDoRegister" class="btn" data-i18n="account_register">注册</button>
-      </div>
-
-      <!-- 配置存储服务地址（可空） -->
-      <div class="field">
-        <label data-i18n="account_config_server">配置存储 API</label>
-        <input type="text" id="configServer" placeholder="留空则仅登录不同步">
-        <button id="btnSaveConfigServer" class="btn" data-i18n="save">保存</button>
-      </div>
-      <p class="hint" data-i18n="account_config_server_tip"></p>
-
+      <!-- 配置存储固定使用 REXTIAN SSO，无需用户填写服务器地址 -->
       <div id="syncPwdArea" style="display:none">
         <p class="hint"><strong data-i18n="sync_pwd_title">设置同步加密密码</strong></p>
         <p class="hint" data-i18n="sync_pwd_tip"></p>
